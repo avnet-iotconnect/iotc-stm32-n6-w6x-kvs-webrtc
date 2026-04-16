@@ -91,7 +91,7 @@ All MQTT traffic is protected using TLS 1.2+ with mutual authentication.
 Server certificates are validated against trusted CA certificates stored on the device.
 
 ### **Secure Provisioning**  
-The CLI‑based provisioning workflow supports secure onboarding with on‑device certificate generation and IoTConnect identity enrollment.
+The CLI‑based provisioning workflow supports secure onboarding with on‑device certificate generation and IOTCONNECT identity enrollment.
 
 ---
 

@@ -41,7 +41,7 @@ extern "C" {
  * {10,15,20,25,30} (cmw_imx335.c:149 available_imx335_fps[]) with
  * CMW_ERROR_WRONG_PARAM.  CMW_CAMERA_Init returned -7 ("r=9" in the
  * [CAM] S3 Init< trace), MediaCam_Init asserted, and the KVS task never
- * registered as master so IoTConnect's Start Video button was a no-op.
+ * registered as master so IOTCONNECT's Start Video button was a no-op.
  *
  * Held at 10 fps (sensor minimum) and rely on the encoder bitrate cap
  * (300 kbps — see media_enc.c:280) to fit the TURN+TCP pipe.  At

@@ -55,11 +55,20 @@ Verify and re-apply in `Middlewares/ST/STM32_ExtMem_Manager/boot/stm32_boot_lrun
 
 Then run `update.sh` and restart debug.
 
-## IoTConnect Device Not Connecting
+## IOTCONNECT Device Not Connecting
 
 Check:
 
 1. Wi-Fi credentials in `bin/config.json` are correct.
 2. The pasted device JSON belongs to the created device.
-3. `Unique Id` in IoTConnect matches the board `thing_name`.
+3. `Unique Id` in IOTCONNECT matches the board `thing_name`.
 4. Rerun `bin\provision_iotconnect.ps1` to reprovision without reflashing.
+
+## KVS WebRTC Video Not Streaming
+
+Check:
+
+1. **ST67W611M module firmware and X-CUBE-ST67W61 middleware must be V1.3.0 or later.** Earlier versions have a WAN UDP receive bug that prevents WebRTC ICE/TURN relay negotiation from completing. The device will connect to IOTCONNECT but video streaming will fail.
+2. The IOTCONNECT device template has **Video Streaming** enabled.
+3. Serial log shows `[KVSWebRTC]` lines — if missing, the KVS task did not start.
+4. If using an external 5V supply, ensure it is stable. USB power from ST-LINK alone can cause brownouts during streaming.

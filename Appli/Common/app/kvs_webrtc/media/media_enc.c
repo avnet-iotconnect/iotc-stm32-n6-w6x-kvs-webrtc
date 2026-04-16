@@ -276,7 +276,7 @@ void MediaEnc_Init( const MediaEncConf_t * pxConf )
      * verified stable on external power.  At 640x480/10fps this yields
      * ~150 KB avg + ~240 KB I-frames — still well under the 5.5 Mbps ceiling
      * that previously caused the mid-burst stalls, while giving a visible
-     * quality improvement in the IoTConnect viewer.
+     * quality improvement in the IOTCONNECT viewer.
      *
      * 2026-04-14: dropped to 300 kbps.  With the W6x WAN UDP blackhole
      * forcing relay over TURN+TLS+TCP, the log showed ~1 FPS effective

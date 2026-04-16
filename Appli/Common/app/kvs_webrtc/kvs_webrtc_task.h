@@ -3,7 +3,7 @@
  *
  * FreeRTOS task that runs the KVS WebRTC master peer, streaming H.264
  * video from the on-board DCMIPP+HW-encoder pipeline to AWS KVS viewers.
- * Runs in parallel with the existing IoTConnect MQTT agent task.
+ * Runs in parallel with the existing IOTCONNECT MQTT agent task.
  *
  * Copyright (c) 2025 STMicroelectronics / project contributors.
  * SPDX-License-Identifier: Apache-2.0

@@ -23,10 +23,8 @@
  */
 
 /**
- * @brief A test application which loops through subscribing to a topic and publishing message
- * to a topic. This test application can be used with AWS IoT device advisor test suite to
- * verify that an application implemented using MQTT agent follows best practices in connecting
- * to AWS IoT core.
+ * @brief Pub/sub test task — subscribes to a topic and publishes messages
+ * to verify MQTT agent connectivity via IOTCONNECT.
  */
 /* Standard includes. */
 #include <string.h>
@@ -56,10 +54,7 @@
 static char topic[MAXT_TOPIC_LENGTH];
 
 /**
- * @brief A test application which loops through subscribing to a topic and publishing message
- * to a topic. This test application can be used with AWS IoT device advisor test suite to
- * verify that an application implemented using MQTT agent follows best practices in connecting
- * to AWS IoT core.
+ * @brief Timeout for MQTT notification wait.
  */
 #define configMS_TO_WAIT_FOR_NOTIFICATION            ( 10000 )
 

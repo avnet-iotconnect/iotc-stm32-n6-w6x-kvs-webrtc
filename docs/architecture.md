@@ -4,14 +4,14 @@ This document describes the runtime architecture and where key configuration poi
 
 ## Runtime Overview
 
-Boot starts in `StartDefaultTask`, which initializes CLI, KVS, networking, and then launches the IoTConnect and KVS WebRTC tasks.
+Boot starts in `StartDefaultTask`, which initializes CLI, KVS, networking, and then launches the IOTCONNECT and KVS WebRTC tasks.
 
 ```mermaid
 flowchart TD
     A[StartDefaultTask] --> B[Task_CLI]
     A --> C[KVStore_init]
     A --> D[net_main - ST67]
-    A --> E[IoTConnect Task]
+    A --> E[IOTCONNECT Task]
     A --> F[KVS WebRTC Task]
     E --> G[MQTT Agent]
     G --> H[LED Task]
@@ -23,16 +23,16 @@ Primary entry points:
 
 - Task creation and startup: `Appli/Core/Src/app_freertos.c`
 - Task toggles/priorities/stacks: `Appli/Core/Inc/main.h`
-- IoTConnect runtime: `Appli/Common/app/iotconnect/iotconnect_runtime.c`
+- IOTCONNECT runtime: `Appli/Common/app/iotconnect/iotconnect_runtime.c`
 - KVS WebRTC task: `Appli/Common/app/kvs_webrtc/kvs_webrtc_task.c`
 
-## IoTConnect + KVS WebRTC Integration
+## IOTCONNECT + KVS WebRTC Integration
 
-The IoTConnect task performs HTTPS identity discovery at boot. If the device template has Video Streaming enabled, the identity response contains a `vs` block with:
+The IOTCONNECT task performs HTTPS identity discovery at boot. If the device template has Video Streaming enabled, the identity response contains a `vs` block with:
 - `vs.carn` — KVS signaling channel ARN (region + channel name)
-- `vs.url` — AWS IoT credentials endpoint + role alias
+- `vs.url` — credentials endpoint + role alias
 
-The IoTConnect task parses this and sets runtime config globals, then signals `EVT_MASK_IOTC_KVS_CONFIG`. The KVS WebRTC task waits for this event (with a 60s timeout) before connecting to the KVS signaling channel.
+The IOTCONNECT task parses this and sets runtime config globals, then signals `EVT_MASK_IOTC_KVS_CONFIG`. The KVS WebRTC task waits for this event (with a 60s timeout) before connecting to the KVS signaling channel.
 
 ## FreeRTOS Configuration
 

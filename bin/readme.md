@@ -1,12 +1,12 @@
-# Bin Quick Start (IoTConnect)
+# Bin Quick Start (IOTCONNECT)
 
-This `bin/` flow flashes and provisions the STM32N6570-DK for IoTConnect with automatic KVS WebRTC configuration.
+This `bin/` flow flashes and provisions the STM32N6570-DK for IOTCONNECT with automatic KVS WebRTC configuration.
 
 ## Files in `bin/`
 
 - `flash.ps1` — flashes bootloader + application image
-- `provision.ps1` — IoTConnect provisioning (calls `provision_iotconnect.ps1`)
-- `provision_iotconnect.ps1` — full IoTConnect provisioning flow
+- `provision.ps1` — IOTCONNECT provisioning (calls `provision_iotconnect.ps1`)
+- `provision_iotconnect.ps1` — full IOTCONNECT provisioning flow
 - `run_all.ps1` — runs flash, then provisioning
 - `config.json` — Wi-Fi settings
 - `copy_hex_from_project.ps1` — copies build output from STM32CubeIDE
@@ -18,7 +18,7 @@ This `bin/` flow flashes and provisions the STM32N6570-DK for IoTConnect with au
    - Version `2.20.x` is known-good with the signing command used in this repo
 3. Board connected through ST-LINK USB
 4. Internet access (scripts download Root CA automatically)
-5. An IoTConnect account with a device template configured
+5. An IOTCONNECT account with a device template configured
 
 ## Quick Start
 
@@ -41,7 +41,7 @@ This `bin/` flow flashes and provisions the STM32N6570-DK for IoTConnect with au
 
 4. When prompted, set the board to **Dev mode**, press Enter.
 5. After flashing, set the board to **Flash mode**, power-cycle, press Enter.
-6. Follow the provisioning prompts to create the device in IoTConnect.
+6. Follow the provisioning prompts to create the device in IOTCONNECT.
 
 ## What `run_all.ps1` Does
 
@@ -56,17 +56,17 @@ flowchart TD
     G --> G1[Detect COM + open serial]
     G1 --> G2[Read or update Wi-Fi + thing_name]
     G2 --> G3[Generate tls_key_priv + tls_key_pub + tls_cert on device]
-    G3 --> G4[Show cert + IoTConnect UI instructions]
+    G3 --> G4[Show cert + IOTCONNECT UI instructions]
     G4 --> G5[Paste downloaded device JSON]
     G5 --> G6[Parse JSON + import root CAs]
-    G6 --> G7[Set IoTConnect config + commit + reset]
+    G6 --> G7[Set IOTCONNECT config + commit + reset]
     G7 --> H[Done]
 ```
 
 ## KVS WebRTC
 
-KVS WebRTC configuration is automatic when the IoTConnect device template has Video Streaming enabled.
-No manual KVS configuration is needed — the firmware parses the KVS config from the IoTConnect identity response at runtime.
+KVS WebRTC configuration is automatic when the IOTCONNECT device template has Video Streaming enabled.
+No manual KVS configuration is needed — the firmware parses the KVS config from the IOTCONNECT identity response at runtime.
 
 ## Certificate and Runtime Configuration Storage
 

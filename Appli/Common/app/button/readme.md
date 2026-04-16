@@ -41,19 +41,7 @@ Button pressed:
 2. Press/release USER button
 3. Observe state updates
 
-You can use any MQTT client to monitor button state updates.
-
-For mosquitto and EMQX you can use MQTTX Web Client
-- https://mqttx.app/web-client
-
-Configuration for mosquitto
-- ![mosquitto](../../../../assets/wqttx_conf_mosquiotto.png)
-
-Configuration for EMQX
-- ![EMQX](../../../../assets/wqttx_conf_emqx.png)
-
-Screenshots:
-- ![Button (EMQX)](../../../../assets/emqx_mqtt_button_reported.png)
+Button state is reported via IOTCONNECT telemetry. Monitor events in the IOTCONNECT dashboard.
 
 ## Firmware Notes
 

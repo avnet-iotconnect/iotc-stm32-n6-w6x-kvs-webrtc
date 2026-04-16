@@ -1,6 +1,6 @@
-# IoTConnect UI Onboarding Quickstart for STM32N6570-DK W6X
+# IOTCONNECT UI Onboarding Quickstart for STM32N6570-DK W6X
 
-This quickstart adapts the Avnet IoTConnect UI onboarding flow for this board and this repository.
+This quickstart adapts the Avnet IOTCONNECT UI onboarding flow for this board and this repository.
 
 Reference flow:
 - Avnet UI onboarding guide: https://github.com/avnet-iotconnect/iotc-python-lite-sdk-demos/blob/main/common/general-guides/UI-ONBOARD.md
@@ -39,14 +39,14 @@ Recommended config in [config.json](../bin/config.json):
 }
 ```
 
-## Step 1. Log In To IoTConnect
+## Step 1. Log In To IOTCONNECT
 
 1. Open `https://console.iotconnect.io`
-2. Sign in to your IoTConnect account.
+2. Sign in to your IOTCONNECT account.
 
 ## Step 2. Import The Device Template
 
-1. Open the `Device` area in the IoTConnect UI.
+1. Open the `Device` area in the IOTCONNECT UI.
 2. Go to `Templates`.
 3. Click `Create Template`.
 4. Click `Import`.
@@ -73,9 +73,9 @@ The script:
   - `bin\generated_iotconnect_identity\<thing_name>.iotconnect.cert.pem`
 - prints the exact `/IOTCONNECT` UI instructions in the terminal
 
-## Step 4. Create The Device In IoTConnect
+## Step 4. Create The Device In IOTCONNECT
 
-1. In IoTConnect, go to `Devices`.
+1. In IOTCONNECT, go to `Devices`.
 2. Click `Create Device`.
 3. Set:
    - `Unique ID = thing_name`
@@ -93,7 +93,7 @@ The script:
 2. Copy the full PEM text including:
    - `-----BEGIN CERTIFICATE-----`
    - `-----END CERTIFICATE-----`
-3. Paste it into the IoTConnect device certificate box.
+3. Paste it into the IOTCONNECT device certificate box.
 
 ## Step 6. Save The Device And Download The JSON
 
@@ -136,7 +136,7 @@ After the board reboots, open the board's ST-LINK COM port at `115200 8N1`.
 Expected signs of success:
 - project startup logs appear
 - Wi-Fi initializes
-- IoTConnect identity/bootstrap completes
+- IOTCONNECT identity/bootstrap completes
 - telemetry is published
 - if Video Streaming is enabled, `[KVSWebRTC]` logs appear
 

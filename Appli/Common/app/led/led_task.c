@@ -23,10 +23,8 @@
  */
 
 /**
- * @brief A test application which loops through subscribing to a topic and publishing message
- * to a topic. This test application can be used with AWS IoT device advisor test suite to
- * verify that an application implemented using MQTT agent follows best practices in connecting
- * to AWS IoT core.
+ * @brief LED control task — subscribes to C2D command topic and publishes LED state
+ * via IOTCONNECT MQTT telemetry.
  */
 /* Standard includes. */
 #include <string.h>
@@ -89,10 +87,7 @@ static const LedHwDescriptor_t xLEDs[] =
 #define LED_COUNT   ( ( uint8_t ) ( sizeof( xLEDs ) / sizeof( xLEDs[ 0 ] ) ) )
 
 /**
- * @brief A test application which loops through subscribing to a topic and publishing message
- * to a topic. This test application can be used with AWS IoT device advisor test suite to
- * verify that an application implemented using MQTT agent follows best practices in connecting
- * to AWS IoT core.
+ * @brief Timeout for MQTT notification wait.
  */
 #define configMS_TO_WAIT_FOR_NOTIFICATION            ( 10000 )
 

@@ -67,25 +67,7 @@ The firmware publishes LED status as JSON:
 1. Subscribe to `<thing_name>/led/reported`
 2. Publish control payloads to `<thing_name>/led/desired`
 
-You can use any MQTT client to monitor and control LED status.
-
-For mosquitto and EMQX you can use MQTTX Web Client
-- https://mqttx.app/web-client
-
-Configuration for mosquitto
-- ![mosquitto](../../../../assets/wqttx_conf_mosquiotto.png)
-
-Configuration for EMQX
-- ![EMQX](../../../../assets/wqttx_conf_emqx.png)
-
-Subscribe to:
-- `<thing_name>/led/reported`
-
-Publish to:
-- `<thing_name>/led/desired`
-
-Example screenshots:
-- ![LED Control (EMQX)](../../../../assets/emqx_led_control.png)
+LED control is managed via IOTCONNECT cloud-to-device commands. LED state is reported back via IOTCONNECT telemetry. Monitor and control LEDs from the IOTCONNECT dashboard.
 
 ## Firmware Notes
 

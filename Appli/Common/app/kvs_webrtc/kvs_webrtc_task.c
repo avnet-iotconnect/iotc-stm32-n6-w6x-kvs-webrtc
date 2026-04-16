@@ -11,7 +11,7 @@
  *   5. Run AppCommon_StartSignalingController() — blocks until disconnect.
  *   6. On failure / disconnect: retry with exponential backoff.
  *
- * Runs fully independently of the IoTConnect MQTT agent task.
+ * Runs fully independently of the IOTCONNECT MQTT agent task.
  *
  * Copyright (c) 2025 STMicroelectronics / project contributors.
  * SPDX-License-Identifier: Apache-2.0
@@ -443,14 +443,14 @@ void vKvsWebRtcTask( void * pvParameters )
                                   pdTRUE,
                                   portMAX_DELAY );
 
-    LogInfo( "[KVSWebRTC] Network ready, waiting for IoTConnect identity..." );
+    LogInfo( "[KVSWebRTC] Network ready, waiting for IOTCONNECT identity..." );
 
     /* ── ST bug-report WAN reachability probe (disabled after v1.3.0 MW upgrade) ── */
     /* NetDiag_Run( netif_get_interface( NETIF_STA ) ); */
 
 
     /*
-     * Wait up to 60 s for the IoTConnect task to complete its identity flow
+     * Wait up to 60 s for the IOTCONNECT task to complete its identity flow
      * and parse the "vs" block.  If the event arrives, the runtime config
      * globals (pcKvsAwsRegion etc.) are already populated — no KVStore
      * read needed.  If the timeout expires, fall back to KVStore.
@@ -464,11 +464,11 @@ void vKvsWebRtcTask( void * pvParameters )
 
         if( uxBits & EVT_MASK_IOTC_KVS_CONFIG )
         {
-            LogInfo( "[KVSWebRTC] KVS config received from IoTConnect identity." );
+            LogInfo( "[KVSWebRTC] KVS config received from IOTCONNECT identity." );
         }
         else
         {
-            LogInfo( "[KVSWebRTC] IoTConnect identity timeout — will try KVStore." );
+            LogInfo( "[KVSWebRTC] IOTCONNECT identity timeout — will try KVStore." );
         }
     }
 
@@ -507,12 +507,12 @@ void vKvsWebRtcTask( void * pvParameters )
     {
         vPetWatchdog();
 
-        /* ── Check if config is ready (from IoTConnect or KVStore) ───── */
+        /* ── Check if config is ready (from IOTCONNECT or KVStore) ───── */
         if( ( pcKvsAwsRegion == NULL )    || ( pcKvsAwsRegion[0] == '\0' ) ||
             ( pcKvsChannelName == NULL )  || ( pcKvsChannelName[0] == '\0' ) ||
             ( pcKvsIotRoleAlias == NULL ) || ( pcKvsIotRoleAlias[0] == '\0' ) )
         {
-            /* Runtime globals not set by IoTConnect — try KVStore */
+            /* Runtime globals not set by IOTCONNECT — try KVStore */
             if( prvLoadConfigFromKVStore() != 0 )
             {
                 LogWarn( "[KVSWebRTC] Config incomplete, retrying in 30 s." );
@@ -522,7 +522,7 @@ void vKvsWebRtcTask( void * pvParameters )
         }
         else
         {
-            LogInfo( "[KVSWebRTC] Using IoTConnect-provided config." );
+            LogInfo( "[KVSWebRTC] Using IOTCONNECT-provided config." );
         }
 
         /* ── Load device cert + key from PKCS#11 for TLS mutual auth ── */

@@ -5,10 +5,10 @@ This document maps the repository layout and the role of each major module.
 ## Top-Level Layout
 
 - `FSBL/` — first-stage bootloader project
-- `Appli/` — main firmware project (FreeRTOS, networking, TLS, IoTConnect, KVS WebRTC)
+- `Appli/` — main firmware project (FreeRTOS, networking, TLS, IOTCONNECT, KVS WebRTC)
 - `bin/` — script-based flashing and provisioning flow
 - `docs/` — technical documentation
-- `IOTCONNECT_Templates/` — IoTConnect device template JSON
+- `IOTCONNECT_Templates/` — IOTCONNECT device template JSON
 - `provision_iotconnect.md` — provisioning walkthrough
 
 ## `Appli/Common` Overview
@@ -18,7 +18,7 @@ This document maps the repository layout and the role of each major module.
 Application tasks:
 
 - `mqtt/` — MQTT agent task, reconnect logic, subscription dispatch
-- `iotconnect/` — IoTConnect runtime (identity, telemetry, commands, KVS config parsing)
+- `iotconnect/` — IOTCONNECT runtime (identity, telemetry, commands, KVS config parsing)
 - `kvs_webrtc/` — KVS WebRTC task (signaling, media pipeline)
 - `led/` — LED desired/reported control
 - `button/` — button event reporting
