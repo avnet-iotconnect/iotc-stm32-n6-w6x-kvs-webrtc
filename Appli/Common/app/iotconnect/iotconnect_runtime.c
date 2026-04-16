@@ -31,6 +31,9 @@
 #include "vendor/iotcl_dra_discovery.h"
 #include "vendor/iotcl_dra_identity.h"
 #include "vendor/iotcl_dra_url.h"
+#include "vendor/cJSON.h"
+
+#include "../kvs_webrtc/port/kvs_runtime_config.h"
 
 #define IOTCONNECT_HTTP_PORT                     ( 443U )
 #define IOTCONNECT_HTTP_RECV_TIMEOUT_MS          ( 2000U )
@@ -149,6 +152,7 @@ static BaseType_t prvHandleQueuedCommandEvent( const IoTConnectQueuedEvent_t * p
 static BaseType_t prvHandleQueuedAckEvent( const IoTConnectQueuedEvent_t * pxEvent );
 static void vIoTConnectDemoTask( void * pvParameters );
 static void vIoTConnectSampleTask( void * pvParameters );
+static void prvParseIdentityKvsConfig( const char * pcIdentityJson );
 
 static void prvCopyString( char * pcDest,
                            size_t uxDestLen,
@@ -775,6 +779,265 @@ static BaseType_t prvSaveCachedIdentity( const char * pcIdentityJson )
     return pdTRUE;
 }
 
+/* ── KVS WebRTC config from IoTConnect identity "vs" block ─────────────── */
+
+/* Heap buffers for parsed vs fields — persist for the lifetime of the app */
+static char * pcVsRegion      = NULL;
+static char * pcVsChannelName = NULL;
+static char * pcVsEndpoint    = NULL;
+static char * pcVsRoleAlias   = NULL;
+static char * pcVsThingName   = NULL;
+
+/*
+ * Parse the IoTConnect identity response JSON for the "vs" (video streaming)
+ * block.  If present, extract:
+ *   - AWS region and channel name from vs.carn (KVS signaling channel ARN)
+ *   - Credentials endpoint and role alias from vs.url
+ * Populate the KVS runtime config globals and signal EVT_MASK_IOTC_KVS_CONFIG.
+ *
+ * ARN format : arn:aws:kinesisvideo:<region>:<account>:channel/<name>/<ts>
+ * URL format : https://<endpoint>/role-aliases/<alias>/credentials
+ */
+static void prvParseIdentityKvsConfig( const char * pcIdentityJson )
+{
+    cJSON * pxRoot = NULL;
+    cJSON * pxD    = NULL;
+    cJSON * pxVs   = NULL;
+    const char * pcCarn = NULL;
+    const char * pcUrl  = NULL;
+
+    if( pcIdentityJson == NULL )
+    {
+        return;
+    }
+
+    pxRoot = cJSON_Parse( pcIdentityJson );
+
+    if( pxRoot == NULL )
+    {
+        return;
+    }
+
+    pxD = cJSON_GetObjectItem( pxRoot, "d" );
+
+    if( ( pxD == NULL ) || !cJSON_IsObject( pxD ) )
+    {
+        goto done;
+    }
+
+    /* The "vs" block lives at d.p.vs in the IoTConnect identity response */
+    {
+        cJSON * pxP = cJSON_GetObjectItem( pxD, "p" );
+
+        if( ( pxP != NULL ) && cJSON_IsObject( pxP ) )
+        {
+            pxVs = cJSON_GetObjectItem( pxP, "vs" );
+        }
+    }
+
+    /* Fallback: also check d.vs in case future API versions move it */
+    if( ( pxVs == NULL ) || !cJSON_IsObject( pxVs ) )
+    {
+        pxVs = cJSON_GetObjectItem( pxD, "vs" );
+    }
+
+    if( ( pxVs == NULL ) || !cJSON_IsObject( pxVs ) )
+    {
+        LogInfo( "IoTConnect identity has no 'vs' block (checked d.p.vs and d.vs) — "
+                 "KVS WebRTC not enabled for this device." );
+        goto done;
+    }
+
+    /* ── Extract carn ──────────────────────────────────────────────────── */
+    {
+        cJSON * pxCarn = cJSON_GetObjectItem( pxVs, "carn" );
+
+        if( ( pxCarn == NULL ) || !cJSON_IsString( pxCarn ) ||
+            ( cJSON_GetStringValue( pxCarn ) == NULL ) )
+        {
+            LogWarn( "vs.carn missing or invalid in identity response." );
+            goto done;
+        }
+
+        pcCarn = cJSON_GetStringValue( pxCarn );
+    }
+
+    /* ── Extract url ───────────────────────────────────────────────────── */
+    {
+        cJSON * pxUrl = cJSON_GetObjectItem( pxVs, "url" );
+
+        if( ( pxUrl != NULL ) && cJSON_IsString( pxUrl ) )
+        {
+            pcUrl = cJSON_GetStringValue( pxUrl );
+        }
+    }
+
+    /* ── Parse region + channel name from ARN ──────────────────────────── */
+    /* arn:aws:kinesisvideo:<region>:<account>:channel/<name>/<ts>          */
+    {
+        const char * p = pcCarn;
+        int iColon = 0;
+        const char * pcRegionStart = NULL;
+        const char * pcRegionEnd   = NULL;
+
+        /* Walk to the 4th colon-delimited field (region) */
+        while( *p != '\0' )
+        {
+            if( *p == ':' )
+            {
+                iColon++;
+
+                if( iColon == 3 )
+                {
+                    pcRegionStart = p + 1;
+                }
+                else if( iColon == 4 )
+                {
+                    pcRegionEnd = p;
+                    break;
+                }
+            }
+
+            p++;
+        }
+
+        if( ( pcRegionStart == NULL ) || ( pcRegionEnd == NULL ) ||
+            ( pcRegionEnd <= pcRegionStart ) )
+        {
+            LogWarn( "Could not parse region from vs.carn: %s", pcCarn );
+            goto done;
+        }
+
+        size_t uxRegionLen = ( size_t )( pcRegionEnd - pcRegionStart );
+        pcVsRegion = pvPortMalloc( uxRegionLen + 1U );
+
+        if( pcVsRegion == NULL )
+        {
+            goto done;
+        }
+
+        memcpy( pcVsRegion, pcRegionStart, uxRegionLen );
+        pcVsRegion[ uxRegionLen ] = '\0';
+
+        /* Channel name: after "channel/" up to the next "/" */
+        const char * pcChanPrefix = strstr( pcCarn, "channel/" );
+
+        if( pcChanPrefix != NULL )
+        {
+            pcChanPrefix += 8; /* skip "channel/" */
+            const char * pcChanEnd = strchr( pcChanPrefix, '/' );
+
+            if( pcChanEnd == NULL )
+            {
+                pcChanEnd = pcChanPrefix + strlen( pcChanPrefix );
+            }
+
+            size_t uxChanLen = ( size_t )( pcChanEnd - pcChanPrefix );
+            pcVsChannelName = pvPortMalloc( uxChanLen + 1U );
+
+            if( pcVsChannelName != NULL )
+            {
+                memcpy( pcVsChannelName, pcChanPrefix, uxChanLen );
+                pcVsChannelName[ uxChanLen ] = '\0';
+            }
+        }
+    }
+
+    /* ── Parse credentials endpoint + role alias from URL ──────────────── */
+    /* https://<endpoint>/role-aliases/<alias>/credentials                  */
+    if( pcUrl != NULL )
+    {
+        const char * pcHostStart = pcUrl;
+
+        /* Skip "https://" */
+        if( strncmp( pcHostStart, "https://", 8 ) == 0 )
+        {
+            pcHostStart += 8;
+        }
+
+        /* Endpoint = hostname (up to first '/') */
+        const char * pcHostEnd = strchr( pcHostStart, '/' );
+
+        if( pcHostEnd != NULL )
+        {
+            size_t uxHostLen = ( size_t )( pcHostEnd - pcHostStart );
+            pcVsEndpoint = pvPortMalloc( uxHostLen + 1U );
+
+            if( pcVsEndpoint != NULL )
+            {
+                memcpy( pcVsEndpoint, pcHostStart, uxHostLen );
+                pcVsEndpoint[ uxHostLen ] = '\0';
+            }
+        }
+
+        /* Role alias: between "/role-aliases/" and "/credentials" */
+        const char * pcRaPrefix = strstr( pcUrl, "/role-aliases/" );
+
+        if( pcRaPrefix != NULL )
+        {
+            pcRaPrefix += 14; /* skip "/role-aliases/" */
+            const char * pcRaEnd = strstr( pcRaPrefix, "/credentials" );
+
+            if( pcRaEnd == NULL )
+            {
+                pcRaEnd = pcRaPrefix + strlen( pcRaPrefix );
+            }
+
+            size_t uxRaLen = ( size_t )( pcRaEnd - pcRaPrefix );
+            pcVsRoleAlias = pvPortMalloc( uxRaLen + 1U );
+
+            if( pcVsRoleAlias != NULL )
+            {
+                memcpy( pcVsRoleAlias, pcRaPrefix, uxRaLen );
+                pcVsRoleAlias[ uxRaLen ] = '\0';
+            }
+        }
+    }
+
+    /* ── Thing name = MQTT client_id from the identity response ────────── */
+    {
+        IotclMqttConfig * pxMqtt = iotcl_mqtt_get_config();
+
+        if( ( pxMqtt != NULL ) && ( pxMqtt->client_id != NULL ) )
+        {
+            size_t uxLen = strlen( pxMqtt->client_id );
+            pcVsThingName = pvPortMalloc( uxLen + 1U );
+
+            if( pcVsThingName != NULL )
+            {
+                memcpy( pcVsThingName, pxMqtt->client_id, uxLen + 1U );
+            }
+        }
+    }
+
+    /* ── Populate KVS runtime config globals ───────────────────────────── */
+    if( ( pcVsRegion != NULL ) && ( pcVsChannelName != NULL ) )
+    {
+        pcKvsAwsRegion           = pcVsRegion;
+        pcKvsChannelName         = pcVsChannelName;
+        pcKvsCredentialsEndpoint = ( pcVsEndpoint  != NULL ) ? pcVsEndpoint  : "";
+        pcKvsIotRoleAlias        = ( pcVsRoleAlias != NULL ) ? pcVsRoleAlias : "";
+        pcKvsIotThingName        = ( pcVsThingName != NULL ) ? pcVsThingName : "";
+
+        /* Cert/key PEM strings remain empty here — the KVS networking layer
+         * must load them from the PKCS#11 store (tls_cert / tls_key_priv)
+         * at TLS connection time, same as the IoTConnect MQTT transport.  */
+
+        LogInfo( "KVS config from IoTConnect: region=%s channel=%s endpoint=%s role=%s thing=%s",
+                 pcKvsAwsRegion, pcKvsChannelName, pcKvsCredentialsEndpoint,
+                 pcKvsIotRoleAlias, pcKvsIotThingName );
+
+        ( void ) xEventGroupSetBits( xSystemEvents, EVT_MASK_IOTC_KVS_CONFIG );
+    }
+    else
+    {
+        LogWarn( "Could not fully parse KVS config from IoTConnect identity vs block." );
+    }
+
+done:
+    cJSON_Delete( pxRoot );
+}
+
 static BaseType_t prvRunIdentityFlow( const char * pcCpid,
                                       const char * pcEnv,
                                       const char * pcDuid,
@@ -941,6 +1204,12 @@ static BaseType_t prvBootstrapIoTConnect( void )
         iotcl_mqtt_print_config();
     }
 
+    /* Parse the "vs" block for KVS WebRTC config (if present) */
+    if( pcIdentityJson != NULL )
+    {
+        prvParseIdentityKvsConfig( pcIdentityJson );
+    }
+
     xStatus = pdTRUE;
 
 cleanup:
@@ -1060,11 +1329,6 @@ static void prvIoTConnectMqttSendCallback( const char * pcTopic,
                  pcTopic,
                  MQTT_Status_strerror( xStatus ) );
     }
-    else if( ( pcTopic != NULL ) &&
-             ( strstr( pcTopic, "mt=6" ) != NULL ) )
-    {
-        LogInfo( "IOTCONNECT C2D ACK published to %s.", pcTopic );
-    }
 }
 
 static BaseType_t prvSubscribeToC2DTopic( MQTTAgentHandle_t xMqttHandle )
@@ -1108,7 +1372,6 @@ static void prvC2DIncomingPublishCallback( void * pvIncomingPublishCallbackConte
                                            MQTTPublishInfo_t * pxPublishInfo )
 {
     char pcTopic[ IOTCONNECT_TOPIC_BUFFER_LEN ];
-    int lStatus = IOTCL_SUCCESS;
 
     ( void ) pvIncomingPublishCallbackContext;
 
@@ -1125,16 +1388,9 @@ static void prvC2DIncomingPublishCallback( void * pvIncomingPublishCallbackConte
             pxPublishInfo->topicNameLength );
     pcTopic[ pxPublishInfo->topicNameLength ] = '\0';
 
-    lStatus = iotcl_mqtt_receive_with_length( pcTopic,
-                                              ( const uint8_t * ) pxPublishInfo->pPayload,
-                                              pxPublishInfo->payloadLength );
-
-    if( lStatus != IOTCL_SUCCESS )
-    {
-        LogWarn( "IOTCONNECT C2D processing returned %d for topic %s.",
-                 lStatus,
-                 pcTopic );
-    }
+    ( void ) iotcl_mqtt_receive_with_length( pcTopic,
+                                             ( const uint8_t * ) pxPublishInfo->pPayload,
+                                             pxPublishInfo->payloadLength );
 }
 
 static void prvDemoButtonEdgeCallback( void * pvContext )
@@ -1357,10 +1613,6 @@ static void prvDemoCommandCallback( IotclC2dEventData xEventData )
                              "Unknown command" );
         return;
     }
-
-    LogInfo( "IOTCONNECT C2D command received: %s (ack=%s).",
-             pcCommand,
-             ( pcAckId != NULL ) ? pcAckId : "<none>" );
 
     prvQueueEvent( &xEvent );
 }

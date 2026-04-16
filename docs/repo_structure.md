@@ -4,25 +4,24 @@ This document maps the repository layout and the role of each major module.
 
 ## Top-Level Layout
 
-- `FSBL/` - first-stage bootloader project
-- `Appli/` - main firmware project (FreeRTOS, networking, TLS, MQTT, application tasks)
-- `bin/` - script-based flashing and provisioning flow
-- `docs/` - technical documentation
-- additional provisioning guides:
-  - [provision_aws_single_cli.md](../provision_aws_single_cli.md)
-  - [provision_aws_single_script.md](../provision_aws_single_script.md)
-  - [provision_mosquitto.md](../provision_mosquitto.md)
-  - [provision_iotconnect.md](../provision_iotconnect.md)
+- `FSBL/` — first-stage bootloader project
+- `Appli/` — main firmware project (FreeRTOS, networking, TLS, IoTConnect, KVS WebRTC)
+- `bin/` — script-based flashing and provisioning flow
+- `docs/` — technical documentation
+- `IOTCONNECT_Templates/` — IoTConnect device template JSON
+- `provision_iotconnect.md` — provisioning walkthrough
 
 ## `Appli/Common` Overview
 
 ### `app/`
 
-Application behavior on top of the shared MQTT session:
+Application tasks:
 
-- `mqtt/` - MQTT agent task, reconnect logic, subscription dispatch
-- `led/` - LED desired/reported control
-- `button/` - button event reporting
+- `mqtt/` — MQTT agent task, reconnect logic, subscription dispatch
+- `iotconnect/` — IoTConnect runtime (identity, telemetry, commands, KVS config parsing)
+- `kvs_webrtc/` — KVS WebRTC task (signaling, media pipeline)
+- `led/` — LED desired/reported control
+- `button/` — button event reporting
 
 ### `cli/`
 
@@ -57,16 +56,9 @@ Non-volatile runtime configuration storage (KVS implementation).
 
 ST67 networking integration:
 
-- `W6X_ARCH_T02/` - ST67 T02 architecture path
-- `lwip_port/` - LwIP and FreeRTOS glue
+- `W6X_ARCH_T02/` — ST67 T02 architecture path
+- `lwip_port/` — LwIP and FreeRTOS glue
 
 ### `sys/`
 
 Shared system utilities and support functions.
-
-## `Appli/Common/net/W6X_ARCH_T02`
-
-- `st67w6x_netconn.c` - network entry point (`net_main`) and event callback orchestration
-- `lwip.c` - interface bring-up/teardown, DHCP/IP event handling
-- `lwip_netif.c` - packet bridge between ST67 driver and LwIP netif
-- `dhcp_server_raw.c` - DHCP server implementation

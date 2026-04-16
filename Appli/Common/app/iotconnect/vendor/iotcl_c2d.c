@@ -34,6 +34,15 @@ typedef enum {
     IOTCL_C2D_ET_STOP_OPERATION = 109,
     IOTCL_C2D_ET_START_HEARTBEAT = 110,
     IOTCL_C2D_ET_STOP_HEARTBEAT = 111,
+
+    // IoTConnect dashboard "Start Video" / "Stop Video" arrive as ct=112
+    // and ct=113 respectively.  Not in the public 2.1 spec but observed
+    // on the wire — treat like device commands so the application callback
+    // can handle them.  (The IOTCL_WARN printf order is misleading: the
+    // first %d in "IOTCL[%d]" is the *type*, the second %d in
+    // "message type %d" is IOTCL_ERR_PARSING_ERROR=5.)
+    IOTCL_C2D_ET_DEVICE_COMMAND_112 = 112,
+    IOTCL_C2D_ET_DEVICE_COMMAND_113 = 113,
 } IotclC2dEventType;
 
 struct IotclC2dEventDataTag {
@@ -51,6 +60,8 @@ static int iotcl_c2d_process_callback(struct IotclC2dEventDataTag *event_data) {
 
     switch (event_data->type) {
         case IOTCL_C2D_ET_DEVICE_COMMAND:
+        case IOTCL_C2D_ET_DEVICE_COMMAND_112:
+        case IOTCL_C2D_ET_DEVICE_COMMAND_113:
             if (config->event_functions.cmd_cb) {
                 config->event_functions.cmd_cb(event_data);
             }
@@ -97,7 +108,10 @@ static int iotcl_c2d_parse_json(cJSON *root) {
     }
     int type = (int) cJSON_GetNumberValue(j_ct);
 
-    if (type != IOTCL_C2D_ET_DEVICE_COMMAND && type != IOTCL_C2D_ET_DEVICE_OTA) {
+    if (type != IOTCL_C2D_ET_DEVICE_COMMAND &&
+        type != IOTCL_C2D_ET_DEVICE_OTA &&
+        type != IOTCL_C2D_ET_DEVICE_COMMAND_112 &&
+        type != IOTCL_C2D_ET_DEVICE_COMMAND_113) {
         status = IOTCL_ERR_PARSING_ERROR;
         IOTCL_WARN(IOTCL_ERR_PARSING_ERROR, "Received unsupported message type %d", type);
         goto cleanup;

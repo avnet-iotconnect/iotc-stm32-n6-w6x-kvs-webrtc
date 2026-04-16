@@ -29,6 +29,44 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/times.h>
+#include <stdint.h>
+
+/* ── Wall-clock time support ──────────────────────────────────────────────
+ * _gettimeofday() returns real wall-clock time once an epoch has been set
+ * via _settimeofday_epoch().  Until then, returns {0,0}.
+ *
+ * The epoch is stored together with the FreeRTOS tick count at the moment
+ * it was captured, allowing _gettimeofday() to extrapolate the current
+ * time from the tick delta.
+ * ────────────────────────────────────────────────────────────────────────── */
+static volatile uint32_t s_epoch_sec     = 0;   /* UTC seconds at capture   */
+static volatile uint32_t s_epoch_usec    = 0;   /* microseconds at capture  */
+static volatile uint32_t s_epoch_tick    = 0;   /* xTaskGetTickCount() at capture */
+static volatile uint8_t  s_epoch_valid   = 0;
+
+/* Weak import — FreeRTOS tick counter.  If FreeRTOS is not linked (unlikely
+ * on this target) we fall back to tick=0 so _gettimeofday still works. */
+extern uint32_t xTaskGetTickCount( void ) __attribute__((weak));
+
+/* configTICK_RATE_HZ from FreeRTOSConfig.h — declare as extern so we don't
+ * need to include FreeRTOS headers in this CubeIDE-generated file.          */
+#ifndef configTICK_RATE_HZ
+#define configTICK_RATE_HZ 1000U
+#endif
+
+/**
+ * @brief Set the wall-clock epoch used by _gettimeofday().
+ *
+ * Called once from the SNTP sync code (sntp_port.c) after obtaining the
+ * current UTC time from an NTP server.
+ */
+void _settimeofday_epoch( uint32_t sec, uint32_t usec )
+{
+    s_epoch_tick  = xTaskGetTickCount ? xTaskGetTickCount() : 0;
+    s_epoch_usec  = usec;
+    s_epoch_sec   = sec;
+    s_epoch_valid = 1;
+}
 
 
 /* Variables */
@@ -151,8 +189,28 @@ int _gettimeofday(struct timeval *tv, void *tzvp)
 
   if (tv != NULL)
   {
-    tv->tv_sec = 0;
-    tv->tv_usec = 0;
+    if (s_epoch_valid)
+    {
+      uint32_t now_tick = xTaskGetTickCount ? xTaskGetTickCount() : 0;
+      uint32_t delta_ticks = now_tick - s_epoch_tick;
+      uint32_t delta_sec  = delta_ticks / configTICK_RATE_HZ;
+      uint32_t delta_ms   = delta_ticks % configTICK_RATE_HZ;
+
+      tv->tv_sec  = s_epoch_sec + delta_sec;
+      tv->tv_usec = s_epoch_usec + delta_ms * 1000U;
+
+      /* Carry microseconds → seconds */
+      while (tv->tv_usec >= 1000000)
+      {
+        tv->tv_usec -= 1000000;
+        tv->tv_sec++;
+      }
+    }
+    else
+    {
+      tv->tv_sec  = 0;
+      tv->tv_usec = 0;
+    }
   }
 
   return 0;

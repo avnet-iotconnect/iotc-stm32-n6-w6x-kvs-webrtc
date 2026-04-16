@@ -55,12 +55,108 @@ defined in linker script */
   .weak Reset_Handler
   .type Reset_Handler, %function
 Reset_Handler:
+  /* Disable interrupts IMMEDIATELY — FSBL's JumpToApplication re-enables
+     PRIMASK before calling Reset_Handler, so stale interrupts (SysTick, UART,
+     etc.) can fire before .bss is zeroed.  C handlers would access
+     uninitialised globals → fault → double-fault → CPU lockup. */
+  cpsid i
+
+  /* Debug: write '!' to LPUART1 — no stack, no function call */
+  ldr   r0, =0x56000C1C   /* LPUART1_S ISR */
+1:
+  ldr   r1, [r0]
+  tst   r1, #(1 << 7)     /* TXE */
+  beq   1b
+  ldr   r0, =0x56000C28   /* LPUART1_S TDR */
+  movs  r1, #0x21         /* '!' */
+  str   r1, [r0]
+
   ldr   r0, =_sstack
   msr   MSPLIM, r0
+
+  /* Debug: 'M' = MSPLIM set OK */
+  ldr   r0, =0x56000C1C
+2:  ldr   r1, [r0]
+  tst   r1, #(1 << 7)
+  beq   2b
+  ldr   r0, =0x56000C28
+  movs  r1, #0x4D         /* 'M' */
+  str   r1, [r0]
+
   ldr   r0, =_estack
   mov   sp, r0          /* set stack pointer */
+
+  /* Debug: 'P' = SP set OK */
+  ldr   r0, =0x56000C1C
+3:  ldr   r1, [r0]
+  tst   r1, #(1 << 7)
+  beq   3b
+  ldr   r0, =0x56000C28
+  movs  r1, #0x50         /* 'P' */
+  str   r1, [r0]
+
+  /* Enable AXISRAM3-6 clocks */
+  ldr   r0, =0x56028A4C   /* RCC_S->MEMENSR */
+  movs  r1, #0x0F         /* AXISRAM3|4|5|6 enable */
+  str   r1, [r0]
+  dsb   sy
+  isb   sy
+
+  /* Power on AXISRAM2-6 via RAMCFG — clear SRAMSD bit 20 (0x100000).
+     Without this, SRAM writes go to the CPU write buffer but drain to
+     unpowered cells, so values are lost after the buffer recycles.
+     RAMCFG_BASE_S = 0x52023000, each instance +0x80, CR at offset 0x00.
+     SRAMSD = bit 20 = 0x00100000. */
+  ldr   r2, =#0x00100000  /* SRAMSD mask */
+
+  ldr   r0, =0x52023080   /* RAMCFG_SRAM2_AXI_S->CR */
+  ldr   r1, [r0]
+  bics  r1, r1, r2
+  str   r1, [r0]
+
+  ldr   r0, =0x52023100   /* RAMCFG_SRAM3_AXI_S->CR */
+  ldr   r1, [r0]
+  bics  r1, r1, r2
+  str   r1, [r0]
+
+  ldr   r0, =0x52023180   /* RAMCFG_SRAM4_AXI_S->CR */
+  ldr   r1, [r0]
+  bics  r1, r1, r2
+  str   r1, [r0]
+
+  ldr   r0, =0x52023200   /* RAMCFG_SRAM5_AXI_S->CR */
+  ldr   r1, [r0]
+  bics  r1, r1, r2
+  str   r1, [r0]
+
+  ldr   r0, =0x52023280   /* RAMCFG_SRAM6_AXI_S->CR */
+  ldr   r1, [r0]
+  bics  r1, r1, r2
+  str   r1, [r0]
+
+  dsb   sy
+  isb   sy
+
+  /* Debug: 'W' = stack write OK */
+  ldr   r0, =0x56000C1C
+4:  ldr   r1, [r0]
+  tst   r1, #(1 << 7)
+  beq   4b
+  ldr   r0, =0x56000C28
+  movs  r1, #0x57         /* 'W' */
+  str   r1, [r0]
+
 /* Call the clock system initialization function.*/
   bl  SystemInit
+
+  /* Debug: 'S' = SystemInit returned OK */
+  ldr   r0, =0x56000C1C
+5:  ldr   r1, [r0]
+  tst   r1, #(1 << 7)
+  beq   5b
+  ldr   r0, =0x56000C28
+  movs  r1, #0x53         /* 'S' */
+  str   r1, [r0]
 
 /* Copy the data segment initializers from flash to SRAM */
   ldr r0, =_sdata
@@ -79,6 +175,15 @@ LoopCopyDataInit:
   cmp r4, r1
   bcc CopyDataInit
 
+  /* Debug: 'D' = .data copy done */
+  ldr   r0, =0x56000C1C
+6:  ldr   r1, [r0]
+  tst   r1, #(1 << 7)
+  beq   6b
+  ldr   r0, =0x56000C28
+  movs  r1, #0x44         /* 'D' */
+  str   r1, [r0]
+
 /* Zero fill the bss segment. */
   ldr r2, =_sbss
   ldr r4, =_ebss
@@ -93,8 +198,31 @@ LoopFillZerobss:
   cmp r2, r4
   bcc FillZerobss
 
+  /* Debug: 'Z' = .bss zeroed */
+  ldr   r0, =0x56000C1C
+7:  ldr   r1, [r0]
+  tst   r1, #(1 << 7)
+  beq   7b
+  ldr   r0, =0x56000C28
+  movs  r1, #0x5A         /* 'Z' */
+  str   r1, [r0]
+
 /* Call static constructors */
   bl __libc_init_array
+
+  /* Re-enable interrupts — FSBL jumped with PRIMASK=1,
+     enable now that all init (.data, .bss, constructors) is done */
+  cpsie i
+
+  /* Debug: 'G' = about to call main */
+  ldr   r0, =0x56000C1C
+8:  ldr   r1, [r0]
+  tst   r1, #(1 << 7)
+  beq   8b
+  ldr   r0, =0x56000C28
+  movs  r1, #0x47         /* 'G' */
+  str   r1, [r0]
+
 /* Call the application's entry point.*/
   bl main
 
@@ -116,6 +244,53 @@ Default_Handler:
 Infinite_Loop:
   b Infinite_Loop
   .size Default_Handler, .-Default_Handler
+
+/* Debug fault handlers — output a character identifying the fault */
+  .section .text.HardFault_Handler,"ax",%progbits
+  .global HardFault_Handler
+  .type HardFault_Handler, %function
+HardFault_Handler:
+  ldr r0, =0x56000C28
+  movs r1, #0x48
+  str r1, [r0]
+  b .
+
+  .section .text.SecureFault_Handler,"ax",%progbits
+  .global SecureFault_Handler
+  .type SecureFault_Handler, %function
+SecureFault_Handler:
+  ldr r0, =0x56000C28
+  movs r1, #0x46
+  str r1, [r0]
+  b .
+
+  .section .text.MemManage_Handler,"ax",%progbits
+  .global MemManage_Handler
+  .type MemManage_Handler, %function
+MemManage_Handler:
+  ldr r0, =0x56000C28
+  movs r1, #0x6D
+  str r1, [r0]
+  b .
+
+  .section .text.BusFault_Handler,"ax",%progbits
+  .global BusFault_Handler
+  .type BusFault_Handler, %function
+BusFault_Handler:
+  ldr r0, =0x56000C28
+  movs r1, #0x42
+  str r1, [r0]
+  b .
+
+  .section .text.UsageFault_Handler,"ax",%progbits
+  .global UsageFault_Handler
+  .type UsageFault_Handler, %function
+UsageFault_Handler:
+  ldr r0, =0x56000C28
+  movs r1, #0x55
+  str r1, [r0]
+  b .
+
 
 /******************************************************************************
 *

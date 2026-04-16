@@ -2,10 +2,6 @@
 
 This folder contains the reviewed IOTCONNECT device template for the STM32N6 W6X IoT reference firmware.
 
-Recommended import file:
-
-- [stm32n6_w6x_device_template.json](stm32n6_w6x_device_template.json)
-
 Source reviewed against:
 - [iotconnect_runtime.c](../Appli/Common/app/iotconnect/iotconnect_runtime.c)
 - original exported template JSON provided during bring-up review
@@ -44,13 +40,11 @@ The firmware supports two IOTCONNECT app modes via KV key `iotc_app_mode`:
 
 ## Template Notes
 
-- The device template JSON keeps the same general structure as the exported template.
-- The recommended template file is `stm32n6_w6x_device_template.json`.
+- The completed JSON keeps the same general structure as the exported template.
 - The missing `version` attribute used by sample mode has been added.
 - Friendly `displayName` and `description` values have been filled in.
 - Command `name` values are human-readable while `command` remains the exact token parsed by firmware.
 - This template is a combined superset covering both `demo` and `sample` firmware modes.
-- The default cloud-side telemetry interval in the template is set to `60` seconds.
 
 ## Cloud-Side Payload Note
 

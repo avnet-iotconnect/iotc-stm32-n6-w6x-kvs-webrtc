@@ -89,6 +89,7 @@ static void MX_SAES_CRYP_Init(void);
 static void SystemIsolation_Config(void);
 /* USER CODE BEGIN PFP */
 static void MX_XSPI2_Deinit(void);
+void PeriphCommonClock_Config(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -117,6 +118,20 @@ int main(void)
   /* USER CODE BEGIN SysInit */
   MX_XSPI2_Deinit();
   /* USER CODE END SysInit */
+
+  /* PeriphCommonClock_Config() (XSPI1=HCLK=200MHz) DISABLED.
+   * At 200MHz the PSRAM shows data-integrity issues in sustained bulk
+   * transfers: DCMIPP writes frame N to PSRAM, VENC reads it back, but
+   * the encoder sees "no-change" content (tiny skip-all-MB P-frames of
+   * 37-48 bytes) and eventually hangs waiting on its IRQ at frame ~4.
+   * The 32-bit DEADBEEF smoke-test passed but bulk 720p ARGB8888 frames
+   * apparently don't.  Leaving XSPI1 at the FSBL-default (HSI=64MHz)
+   * gives lower bandwidth but stable reads — user saw a real ceiling-fan
+   * image with this config before it was "upgraded".
+   *
+   * TODO: revisit 200MHz later with different MR0/DummyCycles timing,
+   * or add DelayBlockBypass/SampleShifting calibration.                 */
+  /* PeriphCommonClock_Config(); */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
@@ -161,6 +176,18 @@ void PeriphCommonClock_Config(void)
   */
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_TIM;
   PeriphClkInitStruct.TIMPresSelection = RCC_TIMPRES_DIV2;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /* XSPI1 kernel clock = HCLK = 200 MHz — required for PSRAM (APS256XX)
+   * bandwidth.  Without this, XSPI1 defaults to HSI=64 MHz, which cannot
+   * sustain concurrent DCMIPP DMA writes + VENC reads + Wi-Fi TX.
+   * Matches x-cube-n6-ai-h264-usb-uvc/Src/main.c:262-264.                */
+  PeriphClkInitStruct = (RCC_PeriphCLKInitTypeDef){0};
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_XSPI1;
+  PeriphClkInitStruct.Xspi1ClockSelection  = RCC_XSPI1CLKSOURCE_HCLK;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -241,7 +268,7 @@ static void MX_IWDG_Init(void)
 
   /* USER CODE END IWDG_Init 1 */
   hiwdg.Instance = IWDG;
-  hiwdg.Init.Prescaler = IWDG_PRESCALER_64;
+  hiwdg.Init.Prescaler = IWDG_PRESCALER_256; /* 32.8s — SW crypto TLS handshake needs ~8-10s */
   hiwdg.Init.Window = 4095;
   hiwdg.Init.Reload = 4095;
   hiwdg.Init.EWI = 3;
@@ -430,6 +457,20 @@ static void MX_PKA_Init(void)
   HAL_GPIO_ConfigPinAttributes(GPIOO,GPIO_PIN_1,GPIO_PIN_SEC|GPIO_PIN_NPRIV);
 
   /* USER CODE BEGIN RIF_Init 1 */
+
+  /* VENC / DCMIPP / CSI — RIMC master + RISC slave security attributes.
+   * Without this, the VENC HW encoder registers bus-fault on access.
+   * Matches the reference x-cube-n6-ai-h264-usb-uvc Security_Config().      */
+  {
+      RIMC_MasterConfig_t xRIMC = { 0 };
+      xRIMC.MasterCID = RIF_CID_1;
+      xRIMC.SecPriv   = RIF_ATTRIBUTE_SEC | RIF_ATTRIBUTE_PRIV;
+      HAL_RIF_RIMC_ConfigMasterAttributes( RIF_MASTER_INDEX_DCMIPP, &xRIMC );
+      HAL_RIF_RIMC_ConfigMasterAttributes( RIF_MASTER_INDEX_VENC,   &xRIMC );
+  }
+  HAL_RIF_RISC_SetSlaveSecureAttributes( RIF_RISC_PERIPH_INDEX_CSI,    RIF_ATTRIBUTE_SEC | RIF_ATTRIBUTE_PRIV );
+  HAL_RIF_RISC_SetSlaveSecureAttributes( RIF_RISC_PERIPH_INDEX_DCMIPP, RIF_ATTRIBUTE_SEC | RIF_ATTRIBUTE_PRIV );
+  HAL_RIF_RISC_SetSlaveSecureAttributes( RIF_RISC_PERIPH_INDEX_VENC,   RIF_ATTRIBUTE_SEC | RIF_ATTRIBUTE_PRIV );
 
   /* USER CODE END RIF_Init 1 */
   /* USER CODE BEGIN RIF_Init 2 */

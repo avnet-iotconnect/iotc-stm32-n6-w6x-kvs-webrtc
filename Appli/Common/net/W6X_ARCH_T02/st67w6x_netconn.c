@@ -294,6 +294,36 @@ void net_main(void *argument)
     LogError("Failed to initialize ST67W6X Driver, %" PRIi32 "\n", ret);
   }
 
+  /* ── One-shot NCP factory reset (recovery) ────────────────────────────
+   * Previous streaming session left the ST67W611M with W6X_WiFi_Init
+   * hanging silently — NCP responded to version/MAC queries but would
+   * not bring up the Wi-Fi radio.  W6X_Reset(1) sends the factory-default
+   * AT command; the NCP wipes user state and reboots.  After the next
+   * boot shows "Wi-Fi init is done", set NCP_FACTORY_RESET_ONCE=0 and
+   * reflash the normal build.                                           */
+#ifndef NCP_FACTORY_RESET_ONCE
+#define NCP_FACTORY_RESET_ONCE  0
+#endif
+#if NCP_FACTORY_RESET_ONCE
+  if (W6X_STATUS_OK == ret)
+  {
+    LogInfo("[NCP-RECOVERY] Invoking W6X_Reset(1) factory reset\n");
+    W6X_Status_t rret = W6X_Reset(1);
+    LogInfo("[NCP-RECOVERY] W6X_Reset returned %" PRIi32 " (NCP has rebooted; modem handler stays live)\n",
+            (int32_t)rret);
+    /* Do NOT call W6X_Init again — the MCU-side modem task, semaphores
+     * and RX buffer are already allocated and still valid.  W6X_Reset()
+     * already re-initialised WiFi/BLE internally if they had been up;
+     * in our case neither was up, so we just fall through to
+     * W6X_WiFi_Init() below with the reset NCP.                          */
+    if (rret != W6X_STATUS_OK)
+    {
+      LogError("[NCP-RECOVERY] W6X_Reset failed: %" PRIi32 " — continuing anyway\n",
+               (int32_t)rret);
+    }
+  }
+#endif /* NCP_FACTORY_RESET_ONCE */
+
   if(W6X_STATUS_OK == ret)
   {
   /* Initialize the ST67W6X Wi-Fi module */

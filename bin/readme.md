@@ -1,203 +1,78 @@
-# Bin Quick Start (AWS + Mosquitto + /IOTCONNECT)
+# Bin Quick Start (IoTConnect)
 
-This `bin/` flow supports `broker_type: "aws"`, `broker_type: "mosquitto"`, and `broker_type: "iotconnect"`.
-It flashes the repo's direct-signing output for the application image.
+This `bin/` flow flashes and provisions the STM32N6570-DK for IoTConnect with automatic KVS WebRTC configuration.
 
 ## Files in `bin/`
 
-- `flash.ps1`: flashes bootloader + application image
-- `provision_mosquitto.ps1`: mosquitto provisioning flow
-- `provision_aws_single.ps1`: AWS single-thing provisioning flow
-- `provision_iotconnect.ps1`: /IOTCONNECT provisioning flow using on-device certificate generation
-- `run_all.ps1`: runs flash, then provisioning
-- `config.json`: profile and connection settings
-
-## Application Packaging
-
-The application flash step always uses the repo's STM32 signing flow and flashes the generated signed application image.
-
-If you build from STM32CubeIDE first, use the helper below to copy generated `.bin` artifacts from the project output folders into the `bin/` staging folders expected by the scripts:
-
-```powershell
-.\copy_hex_from_project.ps1
-```
+- `flash.ps1` — flashes bootloader + application image
+- `provision.ps1` — IoTConnect provisioning (calls `provision_iotconnect.ps1`)
+- `provision_iotconnect.ps1` — full IoTConnect provisioning flow
+- `run_all.ps1` — runs flash, then provisioning
+- `config.json` — Wi-Fi settings
+- `copy_hex_from_project.ps1` — copies build output from STM32CubeIDE
 
 ## Prerequisites
 
 1. Windows + PowerShell
-2. Install STM32CubeProgrammer:
-   - https://www.st.com/content/st_com/en/products/development-tools/software-development-tools/stm32-software-development-tools/stm32-programmers/stm32cubeprog.html
-   - Make sure `STM32_Programmer_CLI.exe` is available at:
-   `C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammer\bin\STM32_Programmer_CLI.exe`
-   - For STM32N6 signing/boot flows, STM32CubeProgrammer `2.20.x` is known-good with the legacy signing command used in this repo.
-   - STM32CubeProgrammer `2.21.0+` changed STM32N6 signing behavior and requires `-align` / `--align` in signing commands.
+2. [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html) installed
+   - Version `2.20.x` is known-good with the signing command used in this repo
 3. Board connected through ST-LINK USB
-4. Internet access (scripts download broker Root CA automatically)
-5. If you plan to use `broker_type: "aws"`:
-   - Install AWS CLI v2
-   - Configure credentials/region with `aws configure`
-6. If you plan to use `broker_type: "iotconnect"`:
-   - Use the board-generated certificate to create the device in `/IOTCONNECT`
-   - Download the device JSON from `/IOTCONNECT`
-   - Paste the device JSON back into the provisioning script when prompted
+4. Internet access (scripts download Root CA automatically)
+5. An IoTConnect account with a device template configured
 
 ## Quick Start
 
-1. Open `bin/config.json`
-2. Choose `broker_type` in `config.json` (`mosquitto`, `aws`, or `iotconnect`).
+1. Edit `config.json` with your Wi-Fi credentials:
+   ```json
+   {
+     "broker_type": "iotconnect",
+     "wifi_ssid": "YOUR_WIFI",
+     "wifi_credential": "YOUR_PASSWORD"
+   }
+   ```
+
+2. If you built from STM32CubeIDE, run `.\copy_hex_from_project.ps1` first.
+
 3. Run:
+   ```powershell
+   cd bin
+   .\run_all.ps1
+   ```
 
-```powershell
-cd .\bin
-.\run_all.ps1
-```
-
-4. When prompted, set the STM32N6-DK board to **Dev mode**, then press Enter.
-5. Confirm the mass-erase prompt (`y`) when asked.
-6. When prompted after flashing, set the STM32N6-DK board to **Flash mode**, then power-cycle the board, then press Enter.
+4. When prompted, set the board to **Dev mode**, press Enter.
+5. After flashing, set the board to **Flash mode**, power-cycle, press Enter.
+6. Follow the provisioning prompts to create the device in IoTConnect.
 
 ## What `run_all.ps1` Does
 
 ```mermaid
 flowchart TD
     A[Start run_all.ps1] --> B[Read config.json]
-    B --> C[Prompt: Set board to Dev mode + Press Enter]
-    C --> D[Mass erase confirmation]
-    D --> E[Flash bootloader + app HEX]
-    E --> E1[Prompt: Set board to Flash mode + Power-cycle + Press Enter]
-    E1 --> F{broker_type}
-
-    F -->|mosquitto| G[Run provision_mosquitto.ps1]
+    B --> C[Preflight: check COM port]
+    C --> D[Prompt: Set board to Dev mode]
+    D --> E[Flash bootloader + app]
+    E --> F[Prompt: Set board to Flash mode + power-cycle]
+    F --> G[Run provision.ps1]
     G --> G1[Detect COM + open serial]
-    G1 --> G2[Reset basic Wi-Fi config]
-    G2 --> G3[Download + import mosquitto root CA]
-    G3 --> G4[Generate key + CSR on device]
-    G4 --> G5[Request cert from test.mosquitto.org or manual fallback]
-    G5 --> G6[download the tls_cert]
-    G6 --> G7[Import tls_cert + set endpoint/port + Wi-Fi + commit + reset]
-
-    F -->|aws| H[Run provision_aws_single.ps1]
-    H --> H1[Detect COM + open serial]
-    H1 --> H2[Reset basic Wi-Fi config]
-    H2 --> H3[Download + import AWS root CA]
-    H3 --> H4[Generate key + CSR on device]
-    H4 --> H5[AWS CLI create cert from CSR]
-    H5 --> H6[Ensure Thing exists + attach cert + attach policy]
-    H6 --> H7[Import tls_cert + fetch AWS endpoint + set MQTT/Wi-Fi + commit + reset]
-
-    F -->|iotconnect| I[Run provision_iotconnect.ps1]
-    I --> I1[Detect COM + open serial]
-    I1 --> I2[Read or update Wi-Fi config + thing_name + generate tls_key_priv + tls_key_pub + tls_cert]
-    I2 --> I3[Show cert + UI instructions for device creation]
-    I3 --> I4[Paste downloaded device JSON]
-    I4 --> I5[Parse device JSON + import built-in root_ca_cert + iotconnect_dra_ca]
-    I5 --> I6[Set broker_type + backend + CPID + ENV + app mode + use thing_name as IOTCONNECT DUID]
-    I6 --> I7[clear IOTCONNECT cache + commit + reset]
-
-
-    G7 --> Z[Done]
-    H7 --> Z
-    I7 --> Z
+    G1 --> G2[Read or update Wi-Fi + thing_name]
+    G2 --> G3[Generate tls_key_priv + tls_key_pub + tls_cert on device]
+    G3 --> G4[Show cert + IoTConnect UI instructions]
+    G4 --> G5[Paste downloaded device JSON]
+    G5 --> G6[Parse JSON + import root CAs]
+    G6 --> G7[Set IoTConnect config + commit + reset]
+    G7 --> H[Done]
 ```
 
-Notes:
-- Provisioning output is shown live in console and appended to `bin/log.txt`.
-- `run_all.ps1` automatically picks the provisioning script from `broker_type`.
-- The /IOTCONNECT flow now generates the device certificate on-board and uses `thing_name` as the device identity.
-- If you built from STM32CubeIDE, run `.\copy_hex_from_project.ps1` before `.\run_all.ps1` so the staged `bin\Appli\...` and `bin\FSBL\...` files match your latest build output.
-- For a step-by-step `/IOTCONNECT` UI flow adapted from the Avnet quickstart, use [iotconnect_ui_onboard_quickstart.md](../docs/iotconnect_ui_onboard_quickstart.md).
+## KVS WebRTC
+
+KVS WebRTC configuration is automatic when the IoTConnect device template has Video Streaming enabled.
+No manual KVS configuration is needed — the firmware parses the KVS config from the IoTConnect identity response at runtime.
 
 ## Certificate and Runtime Configuration Storage
 
-- Device certificates and runtime configuration (Wi-Fi settings, MQTT endpoint, MQTT port) are stored in an external flash section that is separate from the main application image.
-- Certificates and configuration are accessed through PKCS#11 and KVS, using the littlefs (LFS) stack.
-- Reflashing firmware does not erase or modify these stored certificates/configuration; they remain persistent in external flash.
-
-### Option A: Mosquitto
-
-Example:
-
-```json
-{
-  "broker_type": "mosquitto",
-  "wifi_ssid": "YOUR_WIFI",
-  "wifi_credential": "YOUR_PASSWORD"
-}
-```
-
-Notes:
-- `provision_mosquitto.ps1` generates key + CSR on device.
-- It tries to auto-request a client cert from `https://test.mosquitto.org/ssl/`.
-- If auto-request fails, it falls back to manual cert download and asks for cert path.
-
-### Option B: AWS
-
-Example:
-
-```json
-{
-  "broker_type": "aws",
-  "wifi_ssid": "YOUR_WIFI",
-  "wifi_credential": "YOUR_PASSWORD"
-}
-```
-
-Notes:
-- AWS endpoint is fetched automatically from AWS CLI (`aws iot describe-endpoint`).
-- AWS MQTT port is fixed to `8883` in the script.
-- AWS Root CA is downloaded automatically in the script.
-- Make sure AWS CLI is installed and configured (`aws configure`).
-
-AWS behavior:
-- The script creates certificate from CSR and registers/attaches it.
-- Default policy name is `AllowAllDev` (or `aws_policy_name` if provided in `config.json`).
-- If the selected AWS IoT policy does not exist, the script creates it automatically with a default allow-all policy document, then attaches it.
-
-### Option C: /IOTCONNECT
-
-Example:
-
-```json
-{
-  "broker_type": "iotconnect",
-  "wifi_ssid": "YOUR_WIFI",
-  "wifi_credential": "YOUR_PASSWORD"
-}
-```
-
-Notes:
-- The `/IOTCONNECT` flow uses the LED/button demo mode.
-- The script parses backend, CPID, ENV, UID, DID, and discovery URL from the pasted `iotcDeviceConfig.json`.
-- The board `thing_name` is used as the `/IOTCONNECT` device DUID.
-- The script generates the device certificate on-board and prints it for UI copy/paste.
-- MQTT and DRA Root CAs are built into the provisioning script.
-- The script refreshes internal `/IOTCONNECT` cached identity state before reboot so the next boot fetches current backend identity as needed.
-- See [/IOTCONNECT provisioning guide](../provision_iotconnect.md) for the full step-by-step workflow.
-- For the UI-driven version of that flow, see [/IOTCONNECT UI onboarding quickstart](../docs/iotconnect_ui_onboard_quickstart.md).
-
-## Run the Examples
-
-After provisioning, use these feature guides:
-
-- [LED Control Example](../Appli/Common/app/led/readme.md)
-- [Button Status Example](../Appli/Common/app/button/readme.md)
-
-## For Other Configurations
-
-Use the main project documentation:
-
-- [Main README](../readme.md)
-- [AWS single-device provisioning guide](../provision_aws_single_cli.md)
-- [AWS single-device provisioning guide (script method)](../provision_aws_single_script.md)
-- [Mosquitto provisioning guide](../provision_mosquitto.md)
-- [/IOTCONNECT provisioning guide](../provision_iotconnect.md)
-- [/IOTCONNECT UI onboarding quickstart](../docs/iotconnect_ui_onboard_quickstart.md)
-
-## Run and Test Examples After Provisioning
-
-After onboarding is complete, run the application examples from the main project README:
-
-- [Run the Examples](../readme.md#run-the-examples)
+- Device certificates and runtime configuration are stored in external flash, separate from the application image.
+- Accessed through PKCS#11 and KVS using the LittleFS stack.
+- Reflashing firmware does not erase stored certificates/configuration.
 
 ---
 

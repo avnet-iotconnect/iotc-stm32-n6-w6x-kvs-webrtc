@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-	<name>stm32n6570_dk_w6x_iot_reference_Appli</name>
+	<name>stm32n6570_dk_w6x_iot_reference_kvs_webrtc_Appli</name>
 	<comment></comment>
 	<projects>
 	</projects>
@@ -53,6 +53,21 @@
 			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_cryp_ex.c</name>
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_cryp_ex.c</locationURI>
+		</link>
+		<link>
+			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_dcmipp.c</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_dcmipp.c</locationURI>
+		</link>
+		<link>
+			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_i2c.c</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_i2c.c</locationURI>
+		</link>
+		<link>
+			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_i2c_ex.c</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_i2c_ex.c</locationURI>
 		</link>
 		<link>
 			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_dma.c</name>
@@ -1023,6 +1038,21 @@
 			<name>Middlewares/lwIP/Network/RTOS/FreeRTOS/sys_arch.c</name>
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/Third_Party/lwIP_Network_lwIP/ports/freertos/sys_arch.c</locationURI>
+		</link>
+		<link>
+			<name>Middlewares/ST/Camera_Middleware</name>
+			<type>2</type>
+			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/Camera_Middleware</locationURI>
+		</link>
+		<link>
+			<name>Middlewares/ST/VideoEncoder_EWL</name>
+			<type>2</type>
+			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/VideoEncoder_EWL</locationURI>
+		</link>
+		<link>
+			<name>Middlewares/Third_Party/VideoEncoder</name>
+			<type>2</type>
+			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/Third_Party/VideoEncoder</locationURI>
 		</link>
 	</linkedResources>
 </projectDescription>

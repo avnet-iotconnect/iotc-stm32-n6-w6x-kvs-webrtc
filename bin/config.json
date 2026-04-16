@@ -1,5 +1,0 @@
-{
-  "broker_type": "mosquitto",
-  "wifi_ssid": "MySSID",
-  "wifi_credential": "MyPassword"
-}

@@ -21,6 +21,7 @@
  */
 
 #include "tls_transport_config.h"
+#include "logging.h"
 
 #if !defined(__USE_STSAFE__)
 

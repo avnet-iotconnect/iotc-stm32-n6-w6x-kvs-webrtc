@@ -29,6 +29,7 @@
 
 /* Standard Include. */
 #include <stdio.h>
+#include <string.h>
 
 /* Include header for logging level macros. */
 #include "logging_levels.h"
@@ -123,6 +124,12 @@ extern void vTaskSuspendAll( void );
     #else
         #define LogDebug( ... )
     #endif
+
+/* LogVerbose is used by the KVS WebRTC SDK but is not defined by this
+ * logging backend.  Define it as a no-op so KVS sources compile cleanly. */
+#ifndef LogVerbose
+    #define LogVerbose( ... )
+#endif
 #endif /* if !defined( LOG_LEVEL ) || ( ( LOG_LEVEL != LOG_NONE ) && ( LOG_LEVEL != LOG_ERROR ) && ( LOG_LEVEL != LOG_WARN ) && ( LOG_LEVEL != LOG_INFO ) && ( LOG_LEVEL != LOG_DEBUG ) ) */
 
 #endif /* LOGGING_H */

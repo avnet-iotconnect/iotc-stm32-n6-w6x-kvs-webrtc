@@ -48,6 +48,8 @@
 #include "mqtt_agent_task.h"
 #endif
 
+#include "kvs_webrtc_task.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -92,8 +94,29 @@ extern void vSubscribePublishTestTask    ( void * pvParameters );
 /* USER CODE END FunctionPrototypes */
 
 /* USER CODE BEGIN 5 */
+/* Raw UART output — bypasses log queue, always visible before reset.
+ * Bounded spin so a wedged UART cannot hang us before the error path. */
+extern void vPetWatchdog(void);
+static void raw_reset_msg(const char *s)
+{
+  while (*s) {
+    uint32_t guard;
+    for (guard = 0; guard < 600000UL; guard++) {
+      if (*(volatile uint32_t *)0x56000C1CUL & (1UL << 7)) {
+        *(volatile uint32_t *)0x56000C28UL = *s;
+        break;
+      }
+    }
+    if (guard == 600000UL) {
+      vPetWatchdog();
+    }
+    s++;
+  }
+}
+
 void vApplicationMallocFailedHook(void)
 {
+  raw_reset_msg("\r\n!!! MALLOC FAIL !!!\r\n");
   LogError("Malloc Fail\n");
   vDoSystemReset();
 }
@@ -111,6 +134,9 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
 {
   taskENTER_CRITICAL();
 
+  raw_reset_msg("\r\n!!! STACK OVERFLOW: ");
+  raw_reset_msg(pcTaskName);
+  raw_reset_msg(" !!!\r\n");
   LogSys("Stack overflow in %s", pcTaskName);
   (void) xTask;
 
@@ -330,6 +356,14 @@ void StartDefaultTask(void *argument)
                    NULL );
   }
 #endif
+
+  /* KVS WebRTC master task — runs in parallel with MQTT/IoTConnect */
+  xTaskCreate( vKvsWebRtcTask,
+               "KVSWebRTC",
+               TASK_STACK_SIZE_KVS_WEBRTC,
+               NULL,
+               TASK_PRIO_KVS_WEBRTC,
+               NULL );
 
   /* Infinite loop */
   for (;;)

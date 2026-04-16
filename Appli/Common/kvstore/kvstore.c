@@ -25,6 +25,7 @@
 
 #include "FreeRTOS.h"
 #include "semphr.h"
+#include "logging.h"
 #include "kvstore.h"
 #include "kvstore_prv.h"
 #include <string.h>

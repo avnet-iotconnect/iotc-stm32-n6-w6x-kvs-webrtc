@@ -546,7 +546,7 @@ void mbedtls_platform_free( void * ptr );
  *
  * Enable Counter Block Cipher mode (CTR) for symmetric ciphers.
  */
-/* #define MBEDTLS_CIPHER_MODE_CTR */
+#define MBEDTLS_CIPHER_MODE_CTR
 
 /**
  * \def MBEDTLS_CIPHER_MODE_OFB

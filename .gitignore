@@ -8,5 +8,11 @@ bin/*.bin
 bin/log.txt
 bin/*.crt
 bin/*.pem
+bin/config.json
 Appli-trusted.bin
 FSBL-trusted.bin
+
+# Development backups & debug artifacts
+_st_bugreport_artifacts/
+_w61_bus_v1.2.0_backup/
+Middlewares/ST/ST67W6X_Network_Driver.v120_backup/

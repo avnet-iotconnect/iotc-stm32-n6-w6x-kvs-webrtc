@@ -44,6 +44,12 @@ extern "C" {
 /** Enable/Disable System module logging */
 #define SYS_LOG_ENABLE                          1
 
+/** Enable/Disable Wi-Fi module logging (v1.3.0 per-subsystem flag, default 0) */
+#define WIFI_LOG_ENABLE                         1
+
+/** Enable/Disable Network module logging (v1.3.0 per-subsystem flag, default 0) */
+#define NET_LOG_ENABLE                          1
+
 /** Debugging only: Enable/Disable AT log, i.e. logs the AT commands incoming/outcoming from/to the NCP */
 #define W61_AT_LOG_ENABLE                       0
 #include "logging.h"

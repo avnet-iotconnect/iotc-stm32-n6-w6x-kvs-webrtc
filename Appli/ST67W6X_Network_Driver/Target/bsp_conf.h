@@ -27,6 +27,8 @@ extern "C" {
 #endif /* __cplusplus */
 
 /* Includes ------------------------------------------------------------------*/
+#include "main.h"
+
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
@@ -43,6 +45,14 @@ extern "C" {
 /* USER CODE BEGIN EC */
 
 /* USER CODE END EC */
+
+/* Global variables ----------------------------------------------------------*/
+/** SPI handle */
+extern SPI_HandleTypeDef NCP_SPI_HANDLE;
+
+/* USER CODE BEGIN GV */
+
+/* USER CODE END GV */
 
 #ifdef __cplusplus
 }

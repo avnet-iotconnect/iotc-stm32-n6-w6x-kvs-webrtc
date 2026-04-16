@@ -27,6 +27,12 @@
 #include "kvstore_prv.h"
 #include <string.h>
 
+#include "logging_levels.h"
+#ifndef LOG_LEVEL
+    #define LOG_LEVEL    LOG_WARN
+#endif
+#include "logging.h"
+
 #if KV_STORE_CACHE_ENABLE
 
     typedef struct

@@ -2,16 +2,17 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host "==============================="
-Write-Host " Starting Flash + Config Flow"
+Write-Host " Starting Flash + Provision Flow"
 Write-Host "==============================="
 
 # Get current script directory
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $configPath = Join-Path $scriptDir "config.json"
 
-# Resolve flash script path
-$flashScript  = Join-Path $scriptDir "flash.ps1"
-$logPath = Join-Path $scriptDir "log.txt"
+# Resolve script paths
+$flashScript    = Join-Path $scriptDir "flash.ps1"
+$provisionScript = Join-Path $scriptDir "provision.ps1"
+$logPath        = Join-Path $scriptDir "log.txt"
 
 # Verify scripts exist
 if (-not (Test-Path $flashScript)) {
@@ -19,14 +20,15 @@ if (-not (Test-Path $flashScript)) {
     exit 1
 }
 
+if (-not (Test-Path $provisionScript)) {
+    Write-Error "provision.ps1 not found at $provisionScript"
+    exit 1
+}
+
 if (-not (Test-Path $configPath)) {
     Write-Error "config.json not found at $configPath"
     exit 1
 }
-
-# Read broker type to select provisioning flow
-$config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
-$brokerType = $config.broker_type
 
 function Resolve-BoardSerialPort {
     param(
@@ -77,21 +79,7 @@ function Assert-SerialPortAvailable {
     }
 }
 
-# Select provision script based on broker_type
-switch ($brokerType) {
-    "mosquitto" { $provisionScript = Join-Path $scriptDir "provision_mosquitto.ps1" }
-    "aws" { $provisionScript = Join-Path $scriptDir "provision_aws_single.ps1" }
-    "iotconnect" { $provisionScript = Join-Path $scriptDir "provision_iotconnect.ps1" }
-    default {
-        Write-Error "Unsupported broker_type '$brokerType'. Use 'mosquitto', 'aws', or 'iotconnect' in config.json."
-        exit 1
-    }
-}
-
-if (-not (Test-Path $provisionScript)) {
-    Write-Error "Provision script not found at $provisionScript"
-    exit 1
-}
+$config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
 
 # Early serial port preflight
 $portName = $null
@@ -138,7 +126,7 @@ Write-Host "Set the STM32N6-DK board to Flash mode, then power-cycle the board."
 [void](Read-Host "Press Enter to continue")
 
 # Run provision
-Write-Host "`n--- Running Provision Script ($brokerType) ---"
+Write-Host "`n--- Running Provision Script ---"
 # Show live output and append the same output to log.txt
 & $provisionScript *>&1 | Tee-Object -FilePath $logPath -Append
 

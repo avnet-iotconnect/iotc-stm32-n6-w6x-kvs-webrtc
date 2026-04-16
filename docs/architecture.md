@@ -4,23 +4,35 @@ This document describes the runtime architecture and where key configuration poi
 
 ## Runtime Overview
 
-Boot starts in `StartDefaultTask`, which initializes CLI, KVS, networking, and MQTT services before launching the application tasks.
+Boot starts in `StartDefaultTask`, which initializes CLI, KVS, networking, and then launches the IoTConnect and KVS WebRTC tasks.
 
 ```mermaid
 flowchart TD
     A[StartDefaultTask] --> B[Task_CLI]
     A --> C[KVStore_init]
     A --> D[net_main - ST67]
-    A --> E[vMQTTAgentTask]
-    E --> F[vLEDTask]
-    E --> G[vButtonTask]
+    A --> E[IoTConnect Task]
+    A --> F[KVS WebRTC Task]
+    E --> G[MQTT Agent]
+    G --> H[LED Task]
+    G --> I[Button Task]
+    E -->|identity vs block| F
 ```
 
 Primary entry points:
 
 - Task creation and startup: `Appli/Core/Src/app_freertos.c`
 - Task toggles/priorities/stacks: `Appli/Core/Inc/main.h`
-- MQTT agent interface: `Appli/Common/app/mqtt/mqtt_agent_task.h`
+- IoTConnect runtime: `Appli/Common/app/iotconnect/iotconnect_runtime.c`
+- KVS WebRTC task: `Appli/Common/app/kvs_webrtc/kvs_webrtc_task.c`
+
+## IoTConnect + KVS WebRTC Integration
+
+The IoTConnect task performs HTTPS identity discovery at boot. If the device template has Video Streaming enabled, the identity response contains a `vs` block with:
+- `vs.carn` — KVS signaling channel ARN (region + channel name)
+- `vs.url` — AWS IoT credentials endpoint + role alias
+
+The IoTConnect task parses this and sets runtime config globals, then signals `EVT_MASK_IOTC_KVS_CONFIG`. The KVS WebRTC task waits for this event (with a 60s timeout) before connecting to the KVS signaling channel.
 
 ## FreeRTOS Configuration
 
@@ -67,50 +79,29 @@ TLS/crypto integration spans:
 
 ### `crypto/`
 
-- **`core_pkcs11_pal_littlefs.c`**  
-  Provides PKCS#11 object storage on LittleFS (persisting keys, certificates, and metadata).
-
-- **`core_pkcs11_pal_utils.c/.h`**  
-  Maps PKCS#11 labels and handles to LittleFS object filenames and lookup structures.
-
-- **`hardware_rng.c`**  
-  Implements hardware RNG integration for mbedTLS entropy (used by `mbedtls_entropy_func` via `MBEDTLS_ENTROPY_HARDWARE_ALT`).
-
-- **`aes_alt.c`**  
-  Provides the mbedTLS AES hardware‑accelerated implementation using the STM32 CRYP peripheral (used by mbedtls via `MBEDTLS_AES_ALT`).
-
-- **`ecdh_alt.c`**  
-  Provides hardware‑accelerated ECDH public key generation and shared‑secret computation using the STM32 PKA peripheral (used by mbedtls via `MBEDTLS_ECDH_GEN_PUBLIC_ALT` and `MBEDTLS_ECDH_COMPUTE_SHARED_ALT`).
-
-- **`ecdsa_alt.c`**  
-  Provides hardware‑accelerated ECDSA sign/verify operations using the STM32 PKA peripheral (used by mbedtls via `MBEDTLS_ECDSA_SIGN_ALT` and `MBEDTLS_ECDSA_VERIFY_ALT`).
-
-- **`ecp_alt.c`**  
-  Provides hardware‑accelerated low‑level ECC point operations (curve math) for mbedTLS via the PKA peripheral (used by mbedtls via `MBEDTLS_ECP_INTERNAL_ALT`, `MBEDTLS_ECP_DOUBLE_JAC_ALT` and `MBEDTLS_ECP_ADD_MIXED_ALT`).
-
-- **`sha256_alt.c`**  
-  Provides hardware‑accelerated SHA‑256 hashing using the STM32 HASH peripheral (used by mbedtls via `MBEDTLS_SHA256_ALT`).
+- **`core_pkcs11_pal_littlefs.c`** — PKCS#11 object storage on LittleFS
+- **`core_pkcs11_pal_utils.c/.h`** — PKCS#11 label/handle to LittleFS filename mapping
+- **`hardware_rng.c`** — Hardware RNG integration for mbedTLS entropy
+- **`aes_alt.c`** — Hardware AES via STM32 CRYP peripheral
+- **`ecdh_alt.c`** — Hardware ECDH via STM32 PKA peripheral
+- **`ecdsa_alt.c`** — Hardware ECDSA via STM32 PKA peripheral
+- **`ecp_alt.c`** — Hardware ECC point operations via PKA peripheral
+- **`sha256_alt.c`** — Hardware SHA-256 via STM32 HASH peripheral
 
 ### `FreeRTOS/`
 
 - `freertos_hooks.c` contains RTOS hook implementations (idle, malloc-fail, stack overflow), watchdog helpers, and runtime stats helpers.
-- `freertos_hooks.h` exposes hook/reset declarations used across the project.
 
 ## LFS and PKCS11 Glue in `Appli/Libraries/`
+
 ### `fs/`
-The **`fs/`** directory contains the LittleFS porting layer for the STM32N6570‑DK.  
-Although multiple flash drivers are present, **this project uses the XSPI‑based path exclusively**:
 
-- **`lfs_port_xspi.c`** — LittleFS port glue for the STM32N6 XSPI interface  
-- **`xspi_nor_mx66uw1g45g.h`** — NOR flash definition for the MX66UW1G45G device used on the N6570‑DK  
-- **`stm32_extmem.c`** — ST External Memory Manager integration providing the XSPI NOR abstraction used by the port
+LittleFS porting layer for the STM32N6570-DK (XSPI-based path):
 
-Together, these components implement the hardware‑adaptation layer that allows LittleFS to run on the MX66UW1G45G XSPI NOR flash device.
-
-Other files in the folder (OSPI, internal NOR, U5/H5 variants) are present for portability but **not used** on this board.
+- **`lfs_port_xspi.c`** — LittleFS port glue for XSPI
+- **`xspi_nor_mx66uw1g45g.h`** — NOR flash definition for MX66UW1G45G
+- **`stm32_extmem.c`** — ST External Memory Manager integration
 
 ### `pkcs11/`
-Contains the public PKCS#11 Cryptoki API headers used by FreeRTOS‑PKCS11 and the PAL layer.
 
-- **`pkcs11.h`** — Full PKCS#11 API definitions (types, attributes, mechanisms, structures). Required for building the PKCS#11 PAL and corePKCS11 library.  
-- **`pkcs11t.h`** — Placeholder header included for compatibility with standard PKCS#11 header layouts; contains no project‑specific content.
+Public PKCS#11 Cryptoki API headers used by FreeRTOS-PKCS11 and the PAL layer.

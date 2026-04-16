@@ -1,0 +1,106 @@
+{
+  "code": "sn6w6xled",
+  "name": "STM32N6 W6X LED and Button Demo",
+  "authType": 2,
+  "attributes": [
+    {
+      "name": "mode",
+      "displayName": "Application Mode",
+      "type": "STRING",
+      "description": "Firmware-reported demo mode identifier.",
+      "unit": "",
+      "aggregateTypes": []
+    },
+    {
+      "name": "firmware_version",
+      "displayName": "Firmware Version",
+      "type": "STRING",
+      "description": "Application firmware version reported by the device.",
+      "unit": "",
+      "aggregateTypes": []
+    },
+    {
+      "name": "led_red",
+      "displayName": "Red LED State",
+      "type": "BOOLEAN",
+      "description": "Current red LED state.",
+      "unit": "",
+      "aggregateTypes": []
+    },
+    {
+      "name": "led_green",
+      "displayName": "Green LED State",
+      "type": "BOOLEAN",
+      "description": "Current green LED state.",
+      "unit": "",
+      "aggregateTypes": []
+    },
+    {
+      "name": "button_user",
+      "displayName": "User Button State",
+      "type": "BOOLEAN",
+      "description": "Current user button state.",
+      "unit": "",
+      "aggregateTypes": []
+    }
+  ],
+  "commands": [
+    {
+      "name": "Turn All LEDs Off",
+      "command": "LED_ALL_OFF",
+      "requiredParam": false,
+      "requiredAck": true,
+      "isOTACommand": false
+    },
+    {
+      "name": "Turn All LEDs On",
+      "command": "LED_ALL_ON",
+      "requiredParam": false,
+      "requiredAck": true,
+      "isOTACommand": false
+    },
+    {
+      "name": "Turn Red LED On",
+      "command": "LED_RED_ON",
+      "requiredParam": false,
+      "requiredAck": true,
+      "isOTACommand": false
+    },
+    {
+      "name": "Turn Red LED Off",
+      "command": "LED_RED_OFF",
+      "requiredParam": false,
+      "requiredAck": true,
+      "isOTACommand": false
+    },
+    {
+      "name": "Turn Green LED Off",
+      "command": "LED_GREEN_OFF",
+      "requiredParam": false,
+      "requiredAck": true,
+      "isOTACommand": false
+    },
+    {
+      "name": "Turn Green LED On",
+      "command": "LED_GREEN_ON",
+      "requiredParam": false,
+      "requiredAck": true,
+      "isOTACommand": false
+    }
+  ],
+  "messageVersion": "2.1",
+  "msgCode": "XG4E4LV",
+  "capability": "0",
+  "enableCSR": "false",
+  "c2dOnDemand": 0,
+  "properties": {
+    "description": "STM32N6 W6X IoT button and LED demo template for IOTCONNECT.",
+    "dataFrequency": "5",
+    "fileSupport": false,
+    "certRenewalDay": 0,
+    "enableCSR": false
+  },
+  "_meta": {
+    "version": "2.0"
+  }
+}

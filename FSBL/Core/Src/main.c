@@ -22,7 +22,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
+#include "stm32_extmem_conf.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -103,14 +104,76 @@ int main(void)
   MX_BSEC_Init();
   MX_EXTMEM_MANAGER_Init();
   /* USER CODE BEGIN 2 */
-
-  /* USER CODE END 2 */
-
-  /* Launch the application */
-  if (BOOT_OK != BOOT_Application())
   {
+    const char *msg;
+    char buf[80];
+    static const char hex[] = "0123456789ABCDEF";
+
+    msg = "\r\n[FSBL] booting app...\r\n";
+    HAL_UART_Transmit(&hlpuart1, (const uint8_t *)msg, strlen(msg), 500);
+
+    extern BOOTStatus_TypeDef MapMemory(void);
+    extern BOOTStatus_TypeDef CopyApplication(void);
+    extern BOOTStatus_TypeDef JumpToApplication(void);
+
+    BOOTStatus_TypeDef ret;
+
+    ret = MapMemory();
+    if (ret != BOOT_OK) {
+      msg = "[FSBL] MapMemory FAIL\r\n";
+      HAL_UART_Transmit(&hlpuart1, (const uint8_t *)msg, strlen(msg), 500);
+      Error_Handler();
+    }
+    msg = "[FSBL] MapMemory OK\r\n";
+    HAL_UART_Transmit(&hlpuart1, (const uint8_t *)msg, strlen(msg), 500);
+
+    ret = CopyApplication();
+    if (ret != BOOT_OK) {
+      msg = "[FSBL] CopyApp FAIL\r\n";
+      HAL_UART_Transmit(&hlpuart1, (const uint8_t *)msg, strlen(msg), 500);
+      Error_Handler();
+    }
+    msg = "[FSBL] CopyApp OK\r\n";
+    HAL_UART_Transmit(&hlpuart1, (const uint8_t *)msg, strlen(msg), 500);
+
+    /* Dump vector table at destination */
+    uint32_t vt_addr = EXTMEM_LRUN_DESTINATION_ADDRESS + EXTMEM_HEADER_OFFSET;
+    uint32_t app_sp = *(volatile uint32_t *)vt_addr;
+    uint32_t app_pc = *(volatile uint32_t *)(vt_addr + 4);
+
+    /* Print SP */
+    int i = 0;
+    const char *lbl = "[FSBL] VT SP=0x";
+    while (*lbl) buf[i++] = *lbl++;
+    for (int b = 28; b >= 0; b -= 4) buf[i++] = hex[(app_sp >> b) & 0xF];
+    buf[i++] = '\r'; buf[i++] = '\n';
+    HAL_UART_Transmit(&hlpuart1, (const uint8_t *)buf, i, 500);
+
+    /* Print PC */
+    i = 0;
+    lbl = "[FSBL] VT PC=0x";
+    while (*lbl) buf[i++] = *lbl++;
+    for (int b = 28; b >= 0; b -= 4) buf[i++] = hex[(app_pc >> b) & 0xF];
+    buf[i++] = '\r'; buf[i++] = '\n';
+    HAL_UART_Transmit(&hlpuart1, (const uint8_t *)buf, i, 500);
+
+    /* Enable AXISRAM3-6 clocks before jumping — the app's SP (0x34300400)
+       is in SRAM5.  SystemInit enables these too, but its own function
+       prologue pushes to the stack before that code runs. */
+    RCC->MEMENSR = RCC_MEMENSR_AXISRAM3ENS | RCC_MEMENSR_AXISRAM4ENS
+                 | RCC_MEMENSR_AXISRAM5ENS | RCC_MEMENSR_AXISRAM6ENS;
+
+    msg = "[FSBL] jumping...\r\n";
+    HAL_UART_Transmit(&hlpuart1, (const uint8_t *)msg, strlen(msg), 500);
+    HAL_Delay(20);
+
+    ret = JumpToApplication();
+    /* Should never reach here */
+    msg = "[FSBL] jump returned!\r\n";
+    HAL_UART_Transmit(&hlpuart1, (const uint8_t *)msg, strlen(msg), 500);
     Error_Handler();
   }
+  /* USER CODE END 2 */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
@@ -132,6 +195,24 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  /* Set external SMPS regulator to overdrive (GPIOF4 high) — required BEFORE
+   * PWR_REGULATOR_VOLTAGE_SCALE0 so the core rail is actually boosted.
+   * Matches BSP_SMPS_Init(SMPS_VOLTAGE_OVERDRIVE) from
+   * x-cube-n6-ai-h264-usb-uvc/Src/main.c:179.  Without this the VENC block
+   * reports FUSE_ERROR (-17) / HW_RESET (-16) on the first encode attempts
+   * because the core supply is still at nominal while PLL1 runs at 1600 MHz. */
+  __HAL_RCC_GPIOF_CLK_ENABLE();
+  {
+    GPIO_InitTypeDef smps_gpio = {0};
+    smps_gpio.Pin   = GPIO_PIN_4;
+    smps_gpio.Mode  = GPIO_MODE_OUTPUT_PP;
+    smps_gpio.Pull  = GPIO_NOPULL;
+    smps_gpio.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    HAL_GPIO_Init(GPIOF, &smps_gpio);
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_4, GPIO_PIN_SET);
+  }
+  HAL_Delay(1);  /* voltage ramp */
 
   /** Configure the System Power Supply
   */
@@ -213,7 +294,7 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK4;
   RCC_ClkInitStruct.CPUCLKSource = RCC_CPUCLKSOURCE_IC1;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_IC2_IC6_IC11;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV1;
   RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV1;

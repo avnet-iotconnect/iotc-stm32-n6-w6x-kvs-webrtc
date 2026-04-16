@@ -79,11 +79,12 @@ extern unsigned long getRunTimeCounterValue(void);
 #define configTICK_RATE_HZ                       ((TickType_t)1000)
 #define configMAX_PRIORITIES                     ( 56 )
 #define configMINIMAL_STACK_SIZE                 ((uint16_t)1024)
-#define configTOTAL_HEAP_SIZE                    ((size_t)300 * 1024)
+#define configTOTAL_HEAP_SIZE                    ((size_t)768 * 1024)
 #define configSTACK_ALLOCATION_FROM_SEPARATE_HEAP 0
 #define configMAX_TASK_NAME_LEN                  ( 32 )
 #define configGENERATE_RUN_TIME_STATS            1
 #define configUSE_TRACE_FACILITY                 1
+#define configUSE_STATS_FORMATTING_FUNCTIONS     1
 #define configUSE_16_BIT_TICKS                   0
 #define configUSE_MUTEXES                        1
 #define configQUEUE_REGISTRY_SIZE                8
@@ -173,9 +174,26 @@ See http://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html. */
 
 /* Normal assert() semantics without relying on the provision of an assert.h
 header file. */
+/* Definitions needed when configGENERATE_RUN_TIME_STATS is on.
+ * Must be defined BEFORE logging.h is included (which transitively pulls in
+ * FreeRTOS.h, which checks for these macros before FreeRTOSConfig.h is fully
+ * parsed — causing a circular-include false error). */
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS   configureTimerForRunTimeStats
+#define portGET_RUN_TIME_COUNTER_VALUE           getRunTimeCounterValue
+
 /* USER CODE BEGIN 1 */
 
-#include "logging.h"
+/* Forward-declare vDyingGasp directly so FreeRTOSConfig.h does not depend
+ * on logging.h (which can pull in FreeRTOS.h and create a circular include).
+ * The full declaration is in Common/cli/logging.h.                           */
+extern void vDyingGasp( void );
+
+/* LogAssert: use the macro from logging.h if available, otherwise fall back
+ * to a no-op so this header can be included from library compilation units
+ * that use a different logging.h.                                            */
+#ifndef LogAssert
+    #define LogAssert( msg )   ( ( void ) 0 )
+#endif
 
 #define configASSERT( x )                               \
     do {                                                \
@@ -205,9 +223,9 @@ void vDoSystemReset(void);
 #endif
 
 /* USER CODE BEGIN 2 */
-/* Definitions needed when configGENERATE_RUN_TIME_STATS is on */
-#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS   configureTimerForRunTimeStats
-#define portGET_RUN_TIME_COUNTER_VALUE           getRunTimeCounterValue
+/* portCONFIGURE_TIMER_FOR_RUN_TIME_STATS and portGET_RUN_TIME_COUNTER_VALUE
+ * are defined earlier in this file (before #include "logging.h") to break the
+ * FreeRTOSConfig.h -> logging.h -> FreeRTOS.h circular include. */
 /* USER CODE END 2 */
 
 /* USER CODE BEGIN Defines */

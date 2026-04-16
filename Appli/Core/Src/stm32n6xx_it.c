@@ -78,7 +78,7 @@ extern DMA_HandleTypeDef handle_GPDMA1_Channel1;
 extern DMA_HandleTypeDef handle_GPDMA1_Channel0;
 extern SPI_HandleTypeDef hspi5;
 /* USER CODE BEGIN EV */
-
+extern DCMIPP_HandleTypeDef hcamera_dcmipp;   /* defined in cmw_camera.c */
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -102,16 +102,90 @@ void NMI_Handler(void)
 /**
   * @brief This function handles Hard fault interrupt.
   */
+/* Bounded UART putc used by the fault-handler diagnostics below.
+ * Duplicated (rather than routing to it_raw_putc which is static in a
+ * different section) to keep the fault path independent: a dropped
+ * char on a wedged UART is fine — we're about to be IWDG-reset. */
+static inline void fault_raw_putc(char c)
+{
+  for (uint32_t i = 0; i < 600000UL; i++) {
+    if (*(volatile uint32_t *)0x56000C1CUL & (1UL << 7)) {
+      *(volatile uint32_t *)0x56000C28UL = (uint32_t)c;
+      return;
+    }
+  }
+}
+
+static void raw_hex32(uint32_t val)
+{
+  static const char hex[] = "0123456789ABCDEF";
+  for (int i = 7; i >= 0; i--) {
+    fault_raw_putc(hex[(val >> (i * 4)) & 0xF]);
+  }
+}
+
+static void raw_str(const char *s)
+{
+  while (*s) {
+    fault_raw_putc(*s++);
+  }
+}
+
+/* Set to 1 to suppress HardFault logging (used during VENC init) */
+volatile uint8_t g_hardfault_log_suppress = 0;
+
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
+  uint32_t cfsr = *(volatile uint32_t *)0xE000ED28UL;
+  uint32_t hfsr = *(volatile uint32_t *)0xE000ED2CUL;
+  uint32_t bfar = *(volatile uint32_t *)0xE000ED38UL;  /* Bus Fault Address Register */
+  uint32_t mmfar = *(volatile uint32_t *)0xE000ED34UL; /* MemManage Fault Address Register */
 
-  /* USER CODE END HardFault_IRQn 0 */
-  while (1)
+  /* Grab stacked PC from the correct exception frame.
+   * EXC_RETURN bit 2: 0 = MSP was used (handler mode), 1 = PSP (thread mode).
+   * We read LR via inline asm since it holds EXC_RETURN in a fault handler. */
+  uint32_t exc_return;
+  __asm volatile ("mov %0, lr" : "=r" (exc_return));
+  uint32_t *frame = (exc_return & (1UL << 2))
+                    ? (uint32_t *)__get_PSP()
+                    : (uint32_t *)__get_MSP();
+  uint32_t fault_pc = frame ? frame[6] : 0;
+  uint32_t fault_lr = frame ? frame[5] : 0;
+
+  /* Clear sticky fault status bits (write-1-to-clear) */
+  *(volatile uint32_t *)0xE000ED28UL = cfsr;
+  *(volatile uint32_t *)0xE000ED2CUL = hfsr;
+
+  if (!g_hardfault_log_suppress)
   {
-    /* USER CODE BEGIN W1_HardFault_IRQn 0 */
-    /* USER CODE END W1_HardFault_IRQn 0 */
+    raw_str("H CFSR=");
+    raw_hex32(cfsr);
+    raw_str(" HFSR=");
+    raw_hex32(hfsr);
+    /* Log BFAR when BusFault Address Valid (BFARVALID = CFSR bit 15) */
+    if (cfsr & (1UL << 15))
+    {
+      raw_str(" BFAR=");
+      raw_hex32(bfar);
+    }
+    /* Log MMFAR when MemManage Address Valid (MMARVALID = CFSR bit 7) */
+    if (cfsr & (1UL << 7))
+    {
+      raw_str(" MMFAR=");
+      raw_hex32(mmfar);
+    }
+    raw_str(" PC=");
+    raw_hex32(fault_pc);
+    raw_str(" LR=");
+    raw_hex32(fault_lr);
+    raw_str("\r\n");
   }
+  /* Halt here — returning from HardFault re-executes the faulting
+   * instruction, and if PSP is corrupted the handler itself faults,
+   * causing a double-fault → Cortex-M Lockup with no UART output.   */
+  while (1) {}
+  /* USER CODE END HardFault_IRQn 0 */
 }
 
 /**
@@ -120,7 +194,7 @@ void HardFault_Handler(void)
 void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
-
+  fault_raw_putc('m');
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)
   {
@@ -135,7 +209,7 @@ void MemManage_Handler(void)
 void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
-
+  fault_raw_putc('B');
   /* USER CODE END BusFault_IRQn 0 */
   while (1)
   {
@@ -150,7 +224,7 @@ void BusFault_Handler(void)
 void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
-
+  fault_raw_putc('U');
   /* USER CODE END UsageFault_IRQn 0 */
   while (1)
   {
@@ -165,7 +239,7 @@ void UsageFault_Handler(void)
 void SecureFault_Handler(void)
 {
   /* USER CODE BEGIN SecureFault_IRQn 0 */
-
+  fault_raw_putc('F');
   /* USER CODE END SecureFault_IRQn 0 */
   while (1)
   {
@@ -390,5 +464,60 @@ void SysTick_Handler (void)
   }
 
   HAL_IncTick();
+}
+
+/**
+  * @brief Gate flag — set by MediaCam once DCMIPP pipes are configured.
+  *        Until then the ISRs disable themselves to avoid hitting
+  *        uninitialised pipe state inside the HAL handler.
+  */
+volatile uint8_t g_dcmipp_irq_ready = 0;
+volatile uint32_t g_dcmipp_irq_count = 0;   /* diagnostic: total DCMIPP IRQ entries */
+
+/* Bounded spin — see rationale in kvs_webrtc_task.c. Called from ISRs,
+ * so must never block for long; 1 ms budget is the safety ceiling.        */
+extern void vPetWatchdog(void);
+static inline void it_raw_putc(char c)
+{
+  for (uint32_t i = 0; i < 600000UL; i++)
+  {
+    if (*(volatile uint32_t *)0x56000C1CUL & (1UL << 7))
+    {
+      *(volatile uint32_t *)0x56000C28UL = (uint32_t)c;
+      return;
+    }
+  }
+  vPetWatchdog();
+}
+
+/**
+  * @brief This function handles DCMIPP global interrupt.
+  */
+void DCMIPP_IRQHandler(void)
+{
+  g_dcmipp_irq_count++;
+  if (g_dcmipp_irq_ready) {
+    /* ISR 'd' putc removed — it was consuming ~87us per interrupt in ISR
+     * context and causing UART contention that made the media task fall
+     * behind the camera frame rate (115200 baud can't sustain the debug
+     * output volume during streaming).                                       */
+    HAL_DCMIPP_IRQHandler(&hcamera_dcmipp);
+  } else {
+    it_raw_putc('D');
+    HAL_NVIC_DisableIRQ(DCMIPP_IRQn);
+  }
+}
+
+/**
+  * @brief This function handles CSI global interrupt.
+  */
+void CSI_IRQHandler(void)
+{
+  if (g_dcmipp_irq_ready) {
+    HAL_DCMIPP_CSI_IRQHandler(&hcamera_dcmipp);
+  } else {
+    it_raw_putc('C');
+    HAL_NVIC_DisableIRQ(CSI_IRQn);
+  }
 }
 /* USER CODE END 1 */

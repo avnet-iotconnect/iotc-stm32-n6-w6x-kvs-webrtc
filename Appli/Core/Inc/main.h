@@ -185,6 +185,7 @@ void Error_Handler(void);
 #define TASK_PRIO_CLI                           (tskIDLE_PRIORITY      + 16)
 #define TASK_PRIO_MQTTA_AGENT                   (tskIDLE_PRIORITY      + 17)
 #define TASK_PRIO_W6X                           (TASK_PRIO_MQTTA_AGENT + 1 )
+#define TASK_PRIO_KVS_WEBRTC                    (tskIDLE_PRIORITY      + 11)  /* between IoTConnect(10) and CLI(16) */
 
 /******************** Tasks stack size ********************/
 #define TASK_STACK_SIZE_BUTTON                  1024/** Stack size of the Button process task            */
@@ -194,6 +195,7 @@ void Error_Handler(void);
 #define TASK_STACK_SIZE_CLI                     2048/** Stack size of the CLI process task               */
 #define TASK_STACK_SIZE_MQTT_AGENT              (2 * 2048)/** Stack size of the MQTTAgent process task         */
 #define TASK_STACK_SIZE_W6X                     2048/** Stack size of the W6X process task               */
+#define TASK_STACK_SIZE_KVS_WEBRTC              (4 * 2048)/** Stack size of the KVS WebRTC task (TLS + WebRTC state) */
 
 /******************** W6X debug config ********************/
 #define W61_AT_LOG_ENABLE                       0         /* w61_driver_config.h */

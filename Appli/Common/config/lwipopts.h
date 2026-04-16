@@ -34,7 +34,7 @@
 #define LWIP_ARP                              1
 #define LWIP_STATS                            1
 #define MIB2_STATS                            1
-#define LWIP_POSIX_SOCKETS_IO_NAMES           0
+#define LWIP_POSIX_SOCKETS_IO_NAMES           1  /* required by KVS WebRTC SDK socket wrappers */
 #define LWIP_COMPAT_SOCKETS                   2
 
 #define LWIP_TCP_KEEPALIVE                    1  /* Keep the TCP link active. Important for MQTT/TLS */

@@ -87,7 +87,7 @@ When opening the `.ioc`, STM32CubeMX may request additional packs. Accept and in
 
 ### Enable lwIP debug
 
-In [lwipopts_freertos.h](C:\Users\stred\OneDrive\Documents\Projects\stm32n6570_dk_w6x_iot_reference\Appli\Common\net\lwip_port\include\lwipopts_freertos.h), uncomment the needed debug macros:
+In `Appli/Common/net/lwip_port/include/lwipopts_freertos.h`, uncomment the needed debug macros:
 
 ```c
 /*#define LWIP_DEBUG                    LWIP_DBG_ON */
@@ -105,7 +105,7 @@ In [lwipopts_freertos.h](C:\Users\stred\OneDrive\Documents\Projects\stm32n6570_d
 
 ### Configure MbedTLS debug
 
-In [main.h](C:\Users\stred\OneDrive\Documents\Projects\stm32n6570_dk_w6x_iot_reference\Appli\Core\Inc\main.h), use:
+In `Appli/Core/Inc/main.h`, use:
 
 ```c
 /**************** MbedTLS debug config ****************/
@@ -122,4 +122,4 @@ In [main.h](C:\Users\stred\OneDrive\Documents\Projects\stm32n6570_dk_w6x_iot_ref
 
 ### Runtime reset after MQTT connection
 
-After MQTT connection is established, debug level is reset to `MBEDTLS_DEBUG_ERROR` in `vSleepUntilMQTTAgentConnected()` in [mqtt_agent_task.c](C:\Users\stred\OneDrive\Documents\Projects\stm32n6570_dk_w6x_iot_reference\Appli\Common\app\mqtt\mqtt_agent_task.c).
+After MQTT connection is established, debug level is reset to `MBEDTLS_DEBUG_ERROR` in `vSleepUntilMQTTAgentConnected()` in `Appli/Common/app/mqtt/mqtt_agent_task.c`.

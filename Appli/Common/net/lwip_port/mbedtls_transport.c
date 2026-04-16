@@ -355,7 +355,16 @@ static void vLogCertInfo( mbedtls_x509_crt * pxCert,
 }
 
 /*-----------------------------------------------------------*/
-/*TODO add proper timeout */
+/* Total time budget (ms) for EWOULDBLOCK retry inside one BIO send callback.
+ * Historically this loop was unbounded with exponential backoff (1,2,4,...),
+ * so when the TCP send window closed (remote/TURN not ACKing) it would hang
+ * forever while petting the IWDG — wedging the entire media pipeline because
+ * the caller holds senderMutex.  100 ms is well under the ICE controller's
+ * outer SendSocketPacket 1000 ms timeout, so it gets the chance to either
+ * retry via mbedtls (WANT_WRITE) or give up and drop the frame.             */
+#define MBEDTLS_SSL_SEND_MAX_RETRY_MS    ( 100U )
+#define MBEDTLS_SSL_SEND_MAX_BACKOFF_MS  ( 10U )
+
 static int mbedtls_ssl_send( void * pvCtx,
                              const unsigned char * pcBuf,
                              size_t uxLen )
@@ -365,6 +374,7 @@ static int mbedtls_ssl_send( void * pvCtx,
     int lError = 0;
     size_t uxBytesSent = 0;
     uint32_t ulBackofftimeMs = 1;
+    TickType_t xStartTicks = xTaskGetTickCount();
 
     vPetWatchdog();
 
@@ -426,6 +436,30 @@ static int mbedtls_ssl_send( void * pvCtx,
 
                 if( lError == EWOULDBLOCK )
                 {
+                    /* Give up after MBEDTLS_SSL_SEND_MAX_RETRY_MS so the upper
+                     * layers can decide what to do next (retry on next video
+                     * frame, or drop the connection).  Returning partial
+                     * progress is safe: mbedtls tracks how many bytes of the
+                     * current record were flushed and retries the remainder. */
+                    if( pdTICKS_TO_MS( xTaskGetTickCount() - xStartTicks )
+                        >= MBEDTLS_SSL_SEND_MAX_RETRY_MS )
+                    {
+                        LogWarn( "mbedtls_ssl_send: EWOULDBLOCK budget (%u ms) "
+                                 "exhausted, sent %u/%u bytes — yielding to caller",
+                                 ( unsigned ) MBEDTLS_SSL_SEND_MAX_RETRY_MS,
+                                 ( unsigned ) uxBytesSent,
+                                 ( unsigned ) uxLen );
+                        lError = ( uxBytesSent == 0 ) ? MBEDTLS_ERR_SSL_WANT_WRITE : 0;
+                        break;
+                    }
+
+                    /* Cap per-iteration sleep so we stay responsive to the
+                     * retry budget (also leaves room for higher-priority
+                     * tasks to run).                                        */
+                    if( ulBackofftimeMs > MBEDTLS_SSL_SEND_MAX_BACKOFF_MS )
+                    {
+                        ulBackofftimeMs = MBEDTLS_SSL_SEND_MAX_BACKOFF_MS;
+                    }
                     vTaskDelay( ulBackofftimeMs );
                     ulBackofftimeMs = ulBackofftimeMs * 2;
                     lError = 0;

@@ -23,39 +23,13 @@ static bool iotcl_topics_match_cfg(const char *cfg_topic, const char *topic, siz
     if (!topic || 0 == topic_length || !cfg_topic) {
         return false;
     }
-
-    const char *filter = cfg_topic;
-    const char *topic_end = topic + topic_length;
-    const char *topic_ptr = topic;
-
-    while (*filter != '\0' && topic_ptr < topic_end) {
-        if (*filter == '#') {
-            // Multi-level wildcard must be terminal and matches the rest of the topic.
-            return (filter[1] == '\0');
-        }
-
-        if (*filter == '+') {
-            // Single-level wildcard matches until the next topic separator.
-            while (topic_ptr < topic_end && *topic_ptr != '/') {
-                topic_ptr++;
-            }
-            filter++;
-            continue;
-        }
-
-        if (*filter != *topic_ptr) {
-            return false;
-        }
-
-        filter++;
-        topic_ptr++;
+    int part_match = strncmp((const char *) topic, cfg_topic, topic_length);
+    if (0 != part_match) {
+        return false;
     }
 
-    if (*filter == '#') {
-        return (filter[1] == '\0');
-    }
-
-    return (*filter == '\0' && topic_ptr == topic_end);
+    // then check if cfg_topic is equal the non-null terminated in size also
+    return (cfg_topic[topic_length] == 0);
 }
 
 static void print_value_if_not_null(const char* heading, const char* value) {

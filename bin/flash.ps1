@@ -4,8 +4,11 @@ $APP_NAME = "stm32n6570_dk_w6x_iot_reference"
 # $BUIL_CONFIG="SW_Crypto"
 $BUIL_CONFIG="HW_Crypto"
 
-$FSBL_BIN_FILE = ".\FSBL\Release\${APP_NAME}_FSBL.bin"
-$APP_BIN_FILE = ".\Appli\${BUIL_CONFIG}\${APP_NAME}_Appli.bin"
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot = Split-Path -Parent $scriptDir
+
+$FSBL_BIN_FILE = Join-Path $repoRoot "FSBL\Release\${APP_NAME}_FSBL.bin"
+$APP_BIN_FILE = Join-Path $repoRoot "Appli\${BUIL_CONFIG}\${APP_NAME}_Appli.bin"
 
 Write-Output "Using FSBL binary: $FSBL_BIN_FILE"
 Write-Output "Using Appli binary: $APP_BIN_FILE"
@@ -17,8 +20,8 @@ Start-Sleep -Seconds 2
 $FLASH_FSBL_ADDRESS = "0x70000000"
 $FLASH_APP_ADDRESS = "0x70100000"
 
-# Remove previously signed binaries in the current working directory
-Remove-Item -Path ".\*.bin" -Force -ErrorAction SilentlyContinue
+# Remove previously signed binaries in the bin/ working directory
+Remove-Item -Path (Join-Path $scriptDir "*.bin") -Force -ErrorAction SilentlyContinue
 
 # Detect OS and set tool paths accordingly
 $isLinuxHost = $false
@@ -58,17 +61,20 @@ foreach ($requiredPath in @($FSBL_BIN_FILE, $APP_BIN_FILE, $PROGRAMMER, $SIGNING
     }
 }
 
+$SIGNED_FSBL_BIN = Join-Path $scriptDir "FSBL-trusted.bin"
+$SIGNED_APP_BIN = Join-Path $scriptDir "Appli-trusted.bin"
+
 # Required FSBL signing for BOOTROM copy and jump (adds padding and header)
-& "$SIGNING_TOOL" -bin "$FSBL_BIN_FILE" -nk -of 0x80000000 -t fsbl -o FSBL-trusted.bin -hv 2.3 -dump FSBL-trusted.bin
+& "$SIGNING_TOOL" -bin "$FSBL_BIN_FILE" -nk -of 0x80000000 -t fsbl -o "$SIGNED_FSBL_BIN" -hv 2.3
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Required Appli signing for FSBL copy and jump (adds padding and header)
-& "$SIGNING_TOOL" -bin "$APP_BIN_FILE" -nk -of 0x80000000 -t fsbl -o Appli-trusted.bin -hv 2.3 -dump Appli-trusted.bin
+& "$SIGNING_TOOL" -bin "$APP_BIN_FILE" -nk -of 0x80000000 -t fsbl -o "$SIGNED_APP_BIN" -hv 2.3
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Flash signed binaries to NOR external flash
-& "$PROGRAMMER" -c port=SWD mode=HOTPLUG ap=1 -w FSBL-trusted.bin $FLASH_FSBL_ADDRESS -el "$EXTERNAL_LOADER"
+& "$PROGRAMMER" -c port=SWD mode=HOTPLUG ap=1 -w "$SIGNED_FSBL_BIN" $FLASH_FSBL_ADDRESS -el "$EXTERNAL_LOADER"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-& "$PROGRAMMER" -c port=SWD mode=HOTPLUG ap=1 -w Appli-trusted.bin $FLASH_APP_ADDRESS -el "$EXTERNAL_LOADER"
+& "$PROGRAMMER" -c port=SWD mode=HOTPLUG ap=1 -w "$SIGNED_APP_BIN" $FLASH_APP_ADDRESS -el "$EXTERNAL_LOADER"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

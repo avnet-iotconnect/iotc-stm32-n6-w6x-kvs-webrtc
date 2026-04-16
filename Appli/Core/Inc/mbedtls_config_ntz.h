@@ -2831,7 +2831,7 @@ void mbedtls_platform_free( void * ptr );
  *
  * This module is required for SSL/TLS server support.
  */
-/*#define MBEDTLS_SSL_SRV_C */
+#define MBEDTLS_SSL_SRV_C  /* Required for DTLS server role in WebRTC peer connection */
 
 /**
  * \def MBEDTLS_SSL_TLS_C
@@ -3131,7 +3131,7 @@ void mbedtls_platform_free( void * ptr );
  *
  * Uncomment to set the maximum plaintext size of the incoming I/O buffer.
  */
-/*#define MBEDTLS_SSL_IN_CONTENT_LEN              16384 */
+#define MBEDTLS_SSL_IN_CONTENT_LEN              16384
 
 /** \def MBEDTLS_SSL_CID_IN_LEN_MAX
  *
@@ -3181,7 +3181,7 @@ void mbedtls_platform_free( void * ptr );
  *
  * Uncomment to set the maximum plaintext size of the outgoing I/O buffer.
  */
-/*#define MBEDTLS_SSL_OUT_CONTENT_LEN             16384 */
+#define MBEDTLS_SSL_OUT_CONTENT_LEN             16384
 
 /** \def MBEDTLS_SSL_DTLS_MAX_BUFFERING
  *
@@ -3198,7 +3198,7 @@ void mbedtls_platform_free( void * ptr );
  * while buffering multiple smaller handshake messages.
  *
  */
-/*#define MBEDTLS_SSL_DTLS_MAX_BUFFERING             32768 */
+#define MBEDTLS_SSL_DTLS_MAX_BUFFERING             32768
 
 /*#define MBEDTLS_PSK_MAX_LEN               32 / **< Max size of TLS pre-shared keys, in bytes (default 256 bits) * / */
 /*#define MBEDTLS_SSL_COOKIE_TIMEOUT        60 / **< Default expiration delay of DTLS cookies, in seconds if HAVE_TIME, or in number of cookies issued * / */

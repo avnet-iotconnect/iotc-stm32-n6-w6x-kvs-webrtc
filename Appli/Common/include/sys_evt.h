@@ -37,6 +37,7 @@
 #define EVT_MASK_MQTT_INIT           (0x01<<4)
 #define EVT_MASK_MQTT_CONNECTED      (0x01<<5)
 #define EVT_MASK_NET_READABLE        (0x01<<6)
+#define EVT_MASK_IOTC_KVS_CONFIG    (0x01<<7)
 
 #define EVT_OTA_UPDATE_AVAILABLE     (0x01 << 0)
 #define EVT_OTA_UPDATE_START         (0x01 << 1)

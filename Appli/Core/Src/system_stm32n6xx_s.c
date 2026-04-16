@@ -173,10 +173,58 @@ extern void *g_pfnVectors;
   * @retval None
   */
 
+/* Raw UART putchar — LPUART1 is already configured by FSBL, just
+   poll TXE and write to TDR.  No HAL, no globals, safe before .bss init. */
+#define LPUART1_S_BASE  0x56000C00UL
+#define RAW_ISR  (*(volatile uint32_t *)(LPUART1_S_BASE + 0x1CUL))
+#define RAW_TDR  (*(volatile uint32_t *)(LPUART1_S_BASE + 0x28UL))
+static inline __attribute__((always_inline)) void raw_putc(char c)
+{
+  while (!(RAW_ISR & (1UL << 7))) {}  /* wait TXE */
+  RAW_TDR = (uint32_t)c;
+}
+
 void SystemInit(void)
 {
-  /* SAU/IDAU, FPU and Interrupts secure/non-secure allocation settings */
-  TZ_SAU_Setup();
+  raw_putc('1');
+
+  /* AXISRAM3-6 clocks — also done in startup asm, but harmless to repeat */
+  RCC->MEMENSR = RCC_MEMENSR_AXISRAM3ENS | RCC_MEMENSR_AXISRAM4ENS
+               | RCC_MEMENSR_AXISRAM5ENS | RCC_MEMENSR_AXISRAM6ENS;
+
+  /* TZ_SAU_Setup — inlined to avoid function call (bl forces push/pop of LR,
+     and the stack return address gets corrupted — root cause still unknown).
+     Original code: TZ_SAU_Setup();  from partition_stm32n657xx.h */
+#if defined (__FPU_USED) && (__FPU_USED == 1U) && \
+    defined (TZ_FPU_NS_USAGE) && (TZ_FPU_NS_USAGE == 1U)
+  SCB->NSACR = (SCB->NSACR & ~(SCB_NSACR_CP10_Msk | SCB_NSACR_CP11_Msk)) |
+               ((SCB_NSACR_CP10_11_VAL << SCB_NSACR_CP10_Pos) & (SCB_NSACR_CP10_Msk | SCB_NSACR_CP11_Msk));
+  FPU->FPCCR = (FPU->FPCCR & ~(FPU_FPCCR_TS_Msk | FPU_FPCCR_CLRONRETS_Msk | FPU_FPCCR_CLRONRET_Msk)) |
+               ((FPU_FPCCR_TS_VAL        << FPU_FPCCR_TS_Pos       ) & FPU_FPCCR_TS_Msk       ) |
+               ((FPU_FPCCR_CLRONRETS_VAL << FPU_FPCCR_CLRONRETS_Pos) & FPU_FPCCR_CLRONRETS_Msk) |
+               ((FPU_FPCCR_CLRONRET_VAL  << FPU_FPCCR_CLRONRET_Pos ) & FPU_FPCCR_CLRONRET_Msk );
+#endif
+#if defined (NVIC_INIT_ITNS0) && (NVIC_INIT_ITNS0 == 1U)
+  NVIC->ITNS[0] = NVIC_INIT_ITNS0_VAL;
+#endif
+#if defined (NVIC_INIT_ITNS1) && (NVIC_INIT_ITNS1 == 1U)
+  NVIC->ITNS[1] = NVIC_INIT_ITNS1_VAL;
+#endif
+#if defined (NVIC_INIT_ITNS2) && (NVIC_INIT_ITNS2 == 1U)
+  NVIC->ITNS[2] = NVIC_INIT_ITNS2_VAL;
+#endif
+#if defined (NVIC_INIT_ITNS3) && (NVIC_INIT_ITNS3 == 1U)
+  NVIC->ITNS[3] = NVIC_INIT_ITNS3_VAL;
+#endif
+#if defined (NVIC_INIT_ITNS4) && (NVIC_INIT_ITNS4 == 1U)
+  NVIC->ITNS[4] = NVIC_INIT_ITNS4_VAL;
+#endif
+#if defined (NVIC_INIT_ITNS5) && (NVIC_INIT_ITNS5 == 1U)
+  NVIC->ITNS[5] = NVIC_INIT_ITNS5_VAL;
+#endif
+#if defined (NVIC_INIT_ITNS6) && (NVIC_INIT_ITNS6 == 1U)
+  NVIC->ITNS[6] = NVIC_INIT_ITNS6_VAL;
+#endif
 
   /* Configure the Vector Table location -------------------------------------*/
 #if defined(USER_VECT_TAB_ADDRESS)
@@ -187,22 +235,18 @@ void SystemInit(void)
 
   /* System configuration setup */
   RCC->APB4ENSR2 = RCC_APB4ENSR2_SYSCFGENS;
-  /* Delay after an RCC peripheral clock enabling */
   (void)RCC->APB4ENR2;
-
-  /* Set default Vector Table location after system reset or return from Standby */
   SYSCFG->INITSVTORCR = SCB->VTOR;
-  /* Read back the value to make sure it is written before deactivating SYSCFG */
   (void) SYSCFG->INITSVTORCR;
-  /* Deactivate SYSCFG clock */
   RCC->APB4ENCR2 = RCC_APB4ENCR2_SYSCFGENC;
+
   /* FPU settings ------------------------------------------------------------*/
 #if (__FPU_PRESENT == 1) && (__FPU_USED == 1)
-  SCB->CPACR |= ((3UL << 20U)|(3UL << 22U));  /* set CP10 and CP11 Full Access */
+  SCB->CPACR |= ((3UL << 20U)|(3UL << 22U));
+  SCB_NS->CPACR |= ((3UL << 20U)|(3UL << 22U));
+#endif
 
-  SCB_NS->CPACR |= ((3UL << 20U)|(3UL << 22U));  /* set CP10 and CP11 Full Access */
-#endif /* __FPU_PRESENT && __FPU_USED */
-
+  raw_putc('2');
 }
 
 /**

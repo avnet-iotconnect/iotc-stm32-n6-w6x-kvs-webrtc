@@ -1,6 +1,6 @@
-# /IOTCONNECT UI Onboarding Quickstart for STM32N6570-DK W6X
+# IoTConnect UI Onboarding Quickstart for STM32N6570-DK W6X
 
-This quickstart adapts the Avnet `/IOTCONNECT` UI onboarding flow for this board and this repository.
+This quickstart adapts the Avnet IoTConnect UI onboarding flow for this board and this repository.
 
 Reference flow:
 - Avnet UI onboarding guide: https://github.com/avnet-iotconnect/iotc-python-lite-sdk-demos/blob/main/common/general-guides/UI-ONBOARD.md
@@ -8,7 +8,7 @@ Reference flow:
 This version replaces the Avnet host quickstart with:
 - the firmware already running on the STM32N6570-DK
 - the board CLI on the ST-LINK virtual COM port
-- [provision_iotconnect.ps1](../bin/provision_iotconnect.ps1)
+- [provision.ps1](../bin/provision.ps1)
 
 ## What This Flow Uses
 
@@ -18,8 +18,8 @@ This version replaces the Avnet host quickstart with:
   - Windows PowerShell
   - ST-LINK VCP connected to the board CLI
 - Repo assets:
-  - [stm32n6_w6x_device_template.json](../IOTCONNECT_Templates/stm32n6_w6x_device_template.json)
-  - [provision_iotconnect.ps1](../bin/provision_iotconnect.ps1)
+  - [stm32n6_w6x_iot_template_completed.json](../IOTCONNECT_Templates/stm32n6_w6x_iot_template_completed.json)
+  - [provision.ps1](../bin/provision.ps1)
 
 ## Before You Start
 
@@ -39,19 +39,19 @@ Recommended config in [config.json](../bin/config.json):
 }
 ```
 
-## Step 1. Log In To /IOTCONNECT
+## Step 1. Log In To IoTConnect
 
 1. Open `https://console.iotconnect.io`
-2. Sign in to your `/IOTCONNECT` account.
+2. Sign in to your IoTConnect account.
 
 ## Step 2. Import The Device Template
 
-1. Open the `Device` area in the `/IOTCONNECT` UI.
+1. Open the `Device` area in the IoTConnect UI.
 2. Go to `Templates`.
 3. Click `Create Template`.
 4. Click `Import`.
 5. Select:
-   - [stm32n6_w6x_device_template.json](../IOTCONNECT_Templates/stm32n6_w6x_device_template.json)
+   - [stm32n6_w6x_iot_template_completed.json](../IOTCONNECT_Templates/stm32n6_w6x_iot_template_completed.json)
 6. Save the template.
 
 ## Step 3. Start Enrollment On The Board
@@ -60,7 +60,7 @@ Run:
 
 ```powershell
 cd <repo>\bin
-.\provision_iotconnect.ps1
+.\provision.ps1
 ```
 
 The script:
@@ -73,9 +73,9 @@ The script:
   - `bin\generated_iotconnect_identity\<thing_name>.iotconnect.cert.pem`
 - prints the exact `/IOTCONNECT` UI instructions in the terminal
 
-## Step 4. Create The Device In /IOTCONNECT
+## Step 4. Create The Device In IoTConnect
 
-1. In `/IOTCONNECT`, go to `Devices`.
+1. In IoTConnect, go to `Devices`.
 2. Click `Create Device`.
 3. Set:
    - `Unique ID = thing_name`
@@ -93,7 +93,7 @@ The script:
 2. Copy the full PEM text including:
    - `-----BEGIN CERTIFICATE-----`
    - `-----END CERTIFICATE-----`
-3. Paste it into the `/IOTCONNECT` device certificate box.
+3. Paste it into the IoTConnect device certificate box.
 
 ## Step 6. Save The Device And Download The JSON
 
@@ -136,8 +136,9 @@ After the board reboots, open the board's ST-LINK COM port at `115200 8N1`.
 Expected signs of success:
 - project startup logs appear
 - Wi-Fi initializes
-- IOTCONNECT identity/bootstrap completes
+- IoTConnect identity/bootstrap completes
 - telemetry is published
+- if Video Streaming is enabled, `[KVSWebRTC]` logs appear
 
 ## Supported On-Device Identity Types
 
@@ -147,6 +148,6 @@ Current firmware support for this flow:
 
 ## Related Files
 
-- [provision_iotconnect.ps1](../bin/provision_iotconnect.ps1)
+- [provision.ps1](../bin/provision.ps1)
 - [provision_iotconnect.md](../provision_iotconnect.md)
-- [stm32n6_w6x_device_template.json](../IOTCONNECT_Templates/stm32n6_w6x_device_template.json)
+- [stm32n6_w6x_iot_template_completed.json](../IOTCONNECT_Templates/stm32n6_w6x_iot_template_completed.json)
