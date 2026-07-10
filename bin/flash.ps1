@@ -5,10 +5,13 @@ $APP_NAME = "stm32n6570_dk_w6x_iot_reference"
 $BUIL_CONFIG="HW_Crypto"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repoRoot = Split-Path -Parent $scriptDir
 
-$FSBL_BIN_FILE = Join-Path $repoRoot "FSBL\Release\${APP_NAME}_FSBL.bin"
-$APP_BIN_FILE = Join-Path $repoRoot "Appli\${BUIL_CONFIG}\${APP_NAME}_Appli.bin"
+# Reads from the pre-built binaries staged in bin/ (committed to the repo),
+# not from a fresh STM32CubeIDE build output at the repo root. Run
+# copy_hex_from_project.ps1 first if you built from source and want to
+# refresh these staged copies.
+$FSBL_BIN_FILE = Join-Path $scriptDir "FSBL\Release\${APP_NAME}_FSBL.bin"
+$APP_BIN_FILE = Join-Path $scriptDir "Appli\${BUIL_CONFIG}\${APP_NAME}_Appli.bin"
 
 Write-Output "Using FSBL binary: $FSBL_BIN_FILE"
 Write-Output "Using Appli binary: $APP_BIN_FILE"
@@ -38,9 +41,9 @@ if (-not $isWindowsHost -and -not $isLinuxHost -and -not $isMacOSHost -and $env:
 }
 
 if ($isLinuxHost) {
-    $PROGRAMMER = "$HOME/STMicroelectronics/STM32Cube/STM32CubeProgrammer20/bin/STM32_Programmer_CLI"
-    $SIGNING_TOOL = "$HOME/STMicroelectronics/STM32Cube/STM32CubeProgrammer20/bin/STM32_SigningTool_CLI"
-    $EXTERNAL_LOADER = "$HOME/STMicroelectronics/STM32Cube/STM32CubeProgrammer20/bin/ExternalLoader/MX66UW1G45G_STM32N6570-DK.stldr"
+    $PROGRAMMER = "$HOME/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/STM32_Programmer_CLI"
+    $SIGNING_TOOL = "$HOME/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/STM32_SigningTool_CLI"
+    $EXTERNAL_LOADER = "$HOME/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/ExternalLoader/MX66UW1G45G_STM32N6570-DK.stldr"
 } elseif ($isMacOSHost) {
     $PROGRAMMER = "/Applications/STMicroelectronics/STM32CubeProgrammer.app/Contents/MacOS/bin/STM32_Programmer_CLI"
     $SIGNING_TOOL = "/Applications/STMicroelectronics/STM32CubeProgrammer.app/Contents/MacOS/bin/STM32_SigningTool_CLI"

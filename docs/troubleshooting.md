@@ -62,7 +62,7 @@ Check:
 1. Wi-Fi credentials in `bin/config.json` are correct.
 2. The pasted device JSON belongs to the created device.
 3. `Unique Id` in IOTCONNECT matches the board `thing_name`.
-4. Rerun `bin\provision_iotconnect.ps1` to reprovision without reflashing.
+4. Rerun `bin\provision.ps1` to reprovision without reflashing.
 
 ## KVS WebRTC Video Not Streaming
 

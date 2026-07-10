@@ -9,7 +9,8 @@ This document maps the repository layout and the role of each major module.
 - `bin/` — script-based flashing and provisioning flow
 - `docs/` — technical documentation
 - `IOTCONNECT_Templates/` — IOTCONNECT device template JSON
-- `provision_iotconnect.md` — provisioning walkthrough
+
+See [readme.md](../readme.md) for the full flash and provisioning walkthrough.
 
 ## `Appli/Common` Overview
 
