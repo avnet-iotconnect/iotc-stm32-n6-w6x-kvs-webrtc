@@ -1,6 +1,13 @@
 # IOTCONNECT Templates
 
-This folder contains the reviewed IOTCONNECT device template for the STM32N6 W6X IoT reference firmware.
+This folder contains two IOTCONNECT device templates for the STM32N6 W6X IoT reference firmware. They are **not**
+interchangeable — pick based on whether you need video streaming:
+
+- **`stm32n6wrt.json`** ("STM32N6 W6X KVS WebRTC") — has `videoStreamResource`/`videoStreamType` properties set.
+  Use this one; it's what [readme.md](../readme.md)'s provisioning steps import. Required for the KVS WebRTC video
+  demo.
+- **`stm32n6_w6x_iot_template_completed.json`** ("STM32N6 W6X LED and Button Demo") — LED/button telemetry and
+  commands only, no video-streaming properties. Use only if you specifically want a non-video template.
 
 Source reviewed against:
 - [iotconnect_runtime.c](../Appli/Common/app/iotconnect/iotconnect_runtime.c)

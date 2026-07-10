@@ -1,0 +1,5 @@
+{
+  "broker_type": "iotconnect",
+  "wifi_ssid": "YOUR_WIFI",
+  "wifi_credential": "YOUR_PASSWORD"
+}

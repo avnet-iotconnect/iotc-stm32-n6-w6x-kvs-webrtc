@@ -1330,7 +1330,7 @@ static int32_t CMW_CAMERA_OV5640_Init( CMW_Sensor_Init_t *initSensors_params)
   camera_bsp.ov5640_bsp.DeInit      = CMW_I2C_DEINIT;
   camera_bsp.ov5640_bsp.WriteReg    = CMW_I2C_WRITEREG16;
   camera_bsp.ov5640_bsp.ReadReg     = CMW_I2C_READREG16;
-  camera_bsp.ov5640_bsp.GetTick     = BSP_GetTick;
+  camera_bsp.ov5640_bsp.GetTick     = HAL_GetTick;
   camera_bsp.ov5640_bsp.Delay       = HAL_Delay;
   camera_bsp.ov5640_bsp.ShutdownPin = CMW_CAMERA_ShutdownPin;
   camera_bsp.ov5640_bsp.EnablePin   = CMW_CAMERA_EnablePin;
@@ -1881,7 +1881,7 @@ static int32_t CMW_CAMERA_IMX335_Init(CMW_Sensor_Init_t *initSensors_params)
   camera_bsp.imx335_bsp.DeInit      = CMW_I2C_DEINIT;
   camera_bsp.imx335_bsp.ReadReg     = CMW_I2C_READREG16;
   camera_bsp.imx335_bsp.WriteReg    = CMW_I2C_WRITEREG16;
-  camera_bsp.imx335_bsp.GetTick     = BSP_GetTick;
+  camera_bsp.imx335_bsp.GetTick     = HAL_GetTick;
   camera_bsp.imx335_bsp.Delay       = HAL_Delay;
   camera_bsp.imx335_bsp.ShutdownPin = CMW_CAMERA_ShutdownPin;
   camera_bsp.imx335_bsp.EnablePin   = CMW_CAMERA_EnablePin;

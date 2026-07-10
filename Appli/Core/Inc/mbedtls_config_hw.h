@@ -2832,7 +2832,7 @@ void mbedtls_platform_free( void * ptr );
  *
  * This module is required for SSL/TLS server support.
  */
-/*#define MBEDTLS_SSL_SRV_C */
+#define MBEDTLS_SSL_SRV_C /* Required for DTLS server role in WebRTC peer connection */
 
 /**
  * \def MBEDTLS_SSL_TLS_C

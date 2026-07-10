@@ -328,7 +328,17 @@ const char *iotcl_c2d_get_ota_original_filename(IotclC2dEventData data, int inde
 }
 
 const char *iotcl_c2d_get_command(IotclC2dEventData data) {
-    if (IOTCL_SUCCESS != iotcl_c2d_validate_data_and_type(data, IOTCL_C2D_ET_DEVICE_COMMAND, "command")) {
+    if (!data) {
+        IOTCL_ERROR(IOTCL_ERR_MISSING_VALUE, "c2d event data null while attempting to get the \"command\" value");
+        return NULL;
+    }
+    /* ct=112/113 (dashboard Start Video / Stop Video) are dispatched to the same
+     * command callback as ct=0 (see iotcl_c2d_process_callback) and carry their
+     * command in the same "cmd" field, so accept all three here too. */
+    if (data->type != IOTCL_C2D_ET_DEVICE_COMMAND &&
+        data->type != IOTCL_C2D_ET_DEVICE_COMMAND_112 &&
+        data->type != IOTCL_C2D_ET_DEVICE_COMMAND_113) {
+        IOTCL_ERROR(IOTCL_ERR_MISSING_VALUE, "Incorrect c2d event type %d! Expected a device command type.", data->type);
         return NULL;
     }
     return iotcl_c2d_get_string_value(data->root, true, "cmd");

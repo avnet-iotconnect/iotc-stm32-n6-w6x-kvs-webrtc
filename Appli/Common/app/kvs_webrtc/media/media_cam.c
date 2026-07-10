@@ -291,7 +291,11 @@ void MediaCam_Init( void )
     raw_puts( "[CAM] S3 Init<r=" );
     raw_putc( '0' + ( char )( ret & 0xF ) );
     raw_puts( "\r\n" );
-    assert( ret == CMW_ERROR_NONE );
+    if( ret != CMW_ERROR_NONE )
+    {
+        raw_puts( "[CAM] S3 FAIL\r\n" );
+        return;
+    }
 
     /* Write back the sensor dims that may have been adjusted by the driver */
     xSensorWidth  = xCamInit.width;

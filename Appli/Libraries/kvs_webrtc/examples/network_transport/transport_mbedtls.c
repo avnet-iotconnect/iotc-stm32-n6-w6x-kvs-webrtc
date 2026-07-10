@@ -505,6 +505,17 @@ static TlsTransportStatus_t tlsSetup( TlsNetworkContext_t * pTlsNetworkContext,
 
     if( returnStatus == TLS_TRANSPORT_SUCCESS )
     {
+        /* Pin to TLS 1.2, matching this project's own mbedtls_transport.c.
+         * MBEDTLS_SSL_PROTO_TLS1_3_EXPERIMENTAL is compiled in, and unlike
+         * every other connection in this project, this one is otherwise left
+         * free to negotiate it against a peer that only speaks TLS 1.2. */
+        mbedtls_ssl_conf_max_version( &( pTlsTransportParams->sslContext.config ),
+                                      MBEDTLS_SSL_MAJOR_VERSION_3,
+                                      MBEDTLS_SSL_MINOR_VERSION_3 );
+    }
+
+    if( returnStatus == TLS_TRANSPORT_SUCCESS )
+    {
         mbedtlsError = setCredentials( &( pTlsTransportParams->sslContext ),
                                        pNetworkCredentials );
 
@@ -691,6 +702,8 @@ TlsTransportStatus_t TLS_FreeRTOS_ContinueHandshake( TlsNetworkContext_t * pTlsN
         }
         else if( mbedtlsError != 0 )
         {
+            LogError( ( "mbedtls_ssl_handshake failed, returned %ld (-0x%04lX).",
+                        ( long ) mbedtlsError, ( unsigned long ) -mbedtlsError ) );
             returnStatus = TLS_TRANSPORT_HANDSHAKE_FAILED;
         }
     }

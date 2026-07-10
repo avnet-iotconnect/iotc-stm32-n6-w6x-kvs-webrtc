@@ -28,6 +28,10 @@
 #include "stm32n6xx_hal_cryp.h"
 #include <string.h>
 
+#include "FreeRTOS.h"
+#include "task.h"
+#include "semphr.h"
+
 #if defined(MBEDTLS_AES_C) && defined(MBEDTLS_AES_ALT)
 
 #define AES_TIMEOUT 0xFFU
@@ -41,6 +45,29 @@
  */
 
 extern CRYP_HandleTypeDef hcryp;
+
+/* The CRYP peripheral is a single shared hardware block, but AES is called
+ * from multiple FreeRTOS tasks concurrently (MQTT, IOTCONNECT HTTPS, KVS
+ * signaling, etc. each run their own TLS session). Every call below fully
+ * de-inits/re-inits the peripheral, so without serializing access here, two
+ * tasks doing TLS at the same time can stomp on each other's CRYP config
+ * mid-operation and corrupt encryption for both. */
+static SemaphoreHandle_t xCrypMutex = NULL;
+
+static SemaphoreHandle_t prvGetCrypMutex( void )
+{
+    if( xCrypMutex == NULL )
+    {
+        taskENTER_CRITICAL();
+        if( xCrypMutex == NULL )
+        {
+            xCrypMutex = xSemaphoreCreateMutex();
+        }
+        taskEXIT_CRITICAL();
+    }
+
+    return xCrypMutex;
+}
 
 void mbedtls_aes_init( mbedtls_aes_context *ctx )
 {
@@ -120,36 +147,55 @@ int mbedtls_aes_crypt_ecb( mbedtls_aes_context *ctx,
     cfg.pInitVect     = NULL;
     cfg.Algorithm     = CRYP_AES_ECB;
 
+    int ret = 0;
+    SemaphoreHandle_t xMutex = prvGetCrypMutex();
+
+    if( ( xMutex == NULL ) || ( xSemaphoreTake( xMutex, portMAX_DELAY ) != pdTRUE ) )
+        return MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
+
     if( HAL_CRYP_DeInit( &hcryp ) != HAL_OK )
-        return MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
-
-    hcryp.Instance = CRYP;
-    if( HAL_CRYP_Init( &hcryp ) != HAL_OK )
-        return MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
-
-    if( HAL_CRYP_SetConfig( &hcryp, &cfg ) != HAL_OK )
-        return MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
-
-    HAL_StatusTypeDef st;
-
-    if( mode == MBEDTLS_AES_ENCRYPT )
     {
-        st = HAL_CRYP_Encrypt( &hcryp,
-                               (uint32_t *) input,
-                               16U,
-                               output,
-                               HAL_MAX_DELAY );
+        ret = MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
     }
     else
     {
-        st = HAL_CRYP_Decrypt( &hcryp,
-                               (uint32_t *) input,
-                               16U,
-                               output,
-                               HAL_MAX_DELAY );
+        hcryp.Instance = CRYP;
+        if( HAL_CRYP_Init( &hcryp ) != HAL_OK )
+        {
+            ret = MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
+        }
+        else if( HAL_CRYP_SetConfig( &hcryp, &cfg ) != HAL_OK )
+        {
+            ret = MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
+        }
+        else
+        {
+            HAL_StatusTypeDef st;
+
+            if( mode == MBEDTLS_AES_ENCRYPT )
+            {
+                st = HAL_CRYP_Encrypt( &hcryp,
+                                       (uint32_t *) input,
+                                       16U,
+                                       output,
+                                       HAL_MAX_DELAY );
+            }
+            else
+            {
+                st = HAL_CRYP_Decrypt( &hcryp,
+                                       (uint32_t *) input,
+                                       16U,
+                                       output,
+                                       HAL_MAX_DELAY );
+            }
+
+            ret = ( st == HAL_OK ) ? 0 : MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
+        }
     }
 
-    return ( st == HAL_OK ) ? 0 : MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
+    xSemaphoreGive( xMutex );
+
+    return ret;
 }
 
 #if defined(MBEDTLS_CIPHER_MODE_CBC)
@@ -199,44 +245,71 @@ int mbedtls_aes_crypt_cbc( mbedtls_aes_context *ctx,
 
     cfg.pInitVect = iv_words;
 
+    int ret = 0;
+    SemaphoreHandle_t xMutex = prvGetCrypMutex();
+
+    if( ( xMutex == NULL ) || ( xSemaphoreTake( xMutex, portMAX_DELAY ) != pdTRUE ) )
+        return MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
+
     if( HAL_CRYP_DeInit( &hcryp ) != HAL_OK )
-        return MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
-
-    hcryp.Instance = CRYP;
-    if( HAL_CRYP_Init( &hcryp ) != HAL_OK )
-        return MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
-
-    if( HAL_CRYP_SetConfig( &hcryp, &cfg ) != HAL_OK )
-        return MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
-
-    HAL_StatusTypeDef st;
-
-    if( mode == MBEDTLS_AES_ENCRYPT )
     {
-        st = HAL_CRYP_Encrypt( &hcryp,
-                               (uint8_t *) input,
-                               (uint32_t) length,
-                               output,
-                               HAL_MAX_DELAY );
-        if( st != HAL_OK )
-            return MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
-
-        memcpy( iv, &output[ length - 16U ], 16U );
+        ret = MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
     }
     else
     {
-        st = HAL_CRYP_Decrypt( &hcryp,
-                               (uint8_t *) input,
-                               (uint32_t) length,
-                               output,
-                               HAL_MAX_DELAY );
-        if( st != HAL_OK )
-            return MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
+        hcryp.Instance = CRYP;
+        if( HAL_CRYP_Init( &hcryp ) != HAL_OK )
+        {
+            ret = MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
+        }
+        else if( HAL_CRYP_SetConfig( &hcryp, &cfg ) != HAL_OK )
+        {
+            ret = MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
+        }
+        else
+        {
+            HAL_StatusTypeDef st;
 
-        memcpy( iv, &input[ length - 16U ], 16U );
+            if( mode == MBEDTLS_AES_ENCRYPT )
+            {
+                st = HAL_CRYP_Encrypt( &hcryp,
+                                       (uint8_t *) input,
+                                       (uint32_t) length,
+                                       output,
+                                       HAL_MAX_DELAY );
+
+                if( st != HAL_OK )
+                {
+                    ret = MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
+                }
+                else
+                {
+                    memcpy( iv, &output[ length - 16U ], 16U );
+                }
+            }
+            else
+            {
+                st = HAL_CRYP_Decrypt( &hcryp,
+                                       (uint8_t *) input,
+                                       (uint32_t) length,
+                                       output,
+                                       HAL_MAX_DELAY );
+
+                if( st != HAL_OK )
+                {
+                    ret = MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
+                }
+                else
+                {
+                    memcpy( iv, &input[ length - 16U ], 16U );
+                }
+            }
+        }
     }
 
-    return 0;
+    xSemaphoreGive( xMutex );
+
+    return ret;
 }
 #endif /* MBEDTLS_CIPHER_MODE_CBC */
 

@@ -7,7 +7,7 @@
 	<buildSpec>
 		<buildCommand>
 			<name>org.eclipse.cdt.managedbuilder.core.genmakebuilder</name>
-			<triggers>clean,full,incremental,</triggers>
+			<triggers>full,incremental,</triggers>
 			<arguments>
 			</arguments>
 		</buildCommand>
@@ -60,16 +60,6 @@
 			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_dcmipp.c</locationURI>
 		</link>
 		<link>
-			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_i2c.c</name>
-			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_i2c.c</locationURI>
-		</link>
-		<link>
-			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_i2c_ex.c</name>
-			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_i2c_ex.c</locationURI>
-		</link>
-		<link>
 			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_dma.c</name>
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_dma.c</locationURI>
@@ -93,6 +83,16 @@
 			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_hash.c</name>
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_hash.c</locationURI>
+		</link>
+		<link>
+			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_i2c.c</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_i2c.c</locationURI>
+		</link>
+		<link>
+			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_i2c_ex.c</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_i2c_ex.c</locationURI>
 		</link>
 		<link>
 			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_iwdg.c</name>
@@ -173,6 +173,21 @@
 			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_xspi.c</name>
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_xspi.c</locationURI>
+		</link>
+		<link>
+			<name>Middlewares/ST/Camera_Middleware</name>
+			<type>2</type>
+			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/Camera_Middleware</locationURI>
+		</link>
+		<link>
+			<name>Middlewares/ST/VideoEncoder_EWL</name>
+			<type>2</type>
+			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/VideoEncoder_EWL</locationURI>
+		</link>
+		<link>
+			<name>Middlewares/Third_Party/VideoEncoder</name>
+			<type>2</type>
+			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/Third_Party/VideoEncoder</locationURI>
 		</link>
 		<link>
 			<name>Middlewares/ST/STM32_ExtMem_Manager/stm32_extmem.c</name>
@@ -1038,21 +1053,6 @@
 			<name>Middlewares/lwIP/Network/RTOS/FreeRTOS/sys_arch.c</name>
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/Third_Party/lwIP_Network_lwIP/ports/freertos/sys_arch.c</locationURI>
-		</link>
-		<link>
-			<name>Middlewares/ST/Camera_Middleware</name>
-			<type>2</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/Camera_Middleware</locationURI>
-		</link>
-		<link>
-			<name>Middlewares/ST/VideoEncoder_EWL</name>
-			<type>2</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/VideoEncoder_EWL</locationURI>
-		</link>
-		<link>
-			<name>Middlewares/Third_Party/VideoEncoder</name>
-			<type>2</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/Third_Party/VideoEncoder</locationURI>
 		</link>
 	</linkedResources>
 </projectDescription>

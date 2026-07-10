@@ -243,6 +243,7 @@
 
             if( xCertObj == CK_INVALID_HANDLE )
             {
+                xResult = CKR_OBJECT_HANDLE_INVALID;
                 lResult = CKR_OBJECT_HANDLE_INVALID;
             }
         }
@@ -289,7 +290,10 @@
         }
         else
         {
-            lResult = ( int32_t ) xResult;
+            /* xResult is a CK_RV (0 = success, positive on failure); mbedtls error
+             * codes are negative on failure. Map so callers checking "< 0" for
+             * failure don't misread a PKCS#11 failure as success. */
+            lResult = MBEDTLS_ERR_X509_FILE_IO_ERROR;
         }
 
         /* Free memory. */

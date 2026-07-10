@@ -49,6 +49,7 @@
 #endif
 
 #include "kvs_webrtc_task.h"
+#include "pki_default_certs.h"
 
 /* USER CODE END Includes */
 
@@ -263,6 +264,10 @@ void StartDefaultTask(void *argument)
     (void) xEventGroupSetBits(xSystemEvents, EVT_MASK_FS_READY);
 
     KVStore_init();
+
+    /* Bake in the AWS IoT root CA and IOTCONNECT DRA CA on first boot so
+     * provisioning doesn't require the "pki import cert" CLI steps. */
+    vPkiProvisionDefaultCaCertificates();
   }
   else
   {
