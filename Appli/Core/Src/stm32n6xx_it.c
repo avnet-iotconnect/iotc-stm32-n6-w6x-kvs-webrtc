@@ -131,6 +131,27 @@ static void raw_str(const char *s)
   }
 }
 
+/* Print a string whose pointer may be garbage: only dereference if it lies in
+ * the app image range (string literals live in .rodata there); else print the
+ * raw value. Bounded so a non-terminated buffer can't wedge the handler. */
+static void raw_maybe_str(const void *p)
+{
+  uint32_t a = (uint32_t)p;
+  if (a >= 0x34000000UL && a < 0x34400000UL) {
+    const char *s = (const char *)p;
+    for (uint32_t n = 0; n < 120 && s[n] != '\0'; n++) {
+      fault_raw_putc(s[n]);
+    }
+  } else {
+    raw_str("@");
+    raw_hex32(a);
+  }
+}
+
+extern volatile const char * g_lastlog_file;
+extern volatile unsigned long g_lastlog_line;
+extern volatile const char * g_lastlog_fmt;
+
 /* Set to 1 to suppress HardFault logging (used during VENC init) */
 volatile uint8_t g_hardfault_log_suppress = 0;
 
@@ -179,6 +200,36 @@ void HardFault_Handler(void)
     raw_hex32(fault_pc);
     raw_str(" LR=");
     raw_hex32(fault_lr);
+    /* Stacked R0 = faulting pointer for a strlen/%s bus fault (confirms 0xC). */
+    raw_str(" R0=");
+    raw_hex32(frame ? frame[0] : 0);
+    /* Backtrace: scan the stack above the exception frame for plausible thumb
+     * return addresses in the app XIP-flash text range (0x3400_0000..0x343F_FFFF,
+     * odd = thumb). addr2line these offline to recover the real call chain above
+     * the printf engine and find the log call site with the NULL %s. */
+    raw_str(" BT=");
+    if (frame)
+    {
+      uint32_t shown = 0;
+      for (uint32_t k = 0; k < 96 && shown < 24; k++)
+      {
+        uint32_t w = frame[k];
+        if (w >= 0x34000000UL && w < 0x34400000UL && (w & 1UL))
+        {
+          fault_raw_putc(' ');
+          raw_hex32(w);
+          shown++;
+        }
+      }
+    }
+    /* Identity of the log call being formatted when the fault hit (set on
+     * entry to vLoggingPrintf) — pinpoints a bad %s argument's call site. */
+    raw_str("\r\nLOG=");
+    raw_maybe_str((const void *)g_lastlog_file);
+    fault_raw_putc(':');
+    raw_hex32((uint32_t)g_lastlog_line);
+    raw_str(" FMT=");
+    raw_maybe_str((const void *)g_lastlog_fmt);
     raw_str("\r\n");
   }
   /* Halt here — returning from HardFault re-executes the faulting

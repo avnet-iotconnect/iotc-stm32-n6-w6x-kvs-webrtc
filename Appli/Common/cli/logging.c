@@ -48,6 +48,12 @@
 
 volatile StreamBufferHandle_t xLogMBuf = NULL;
 
+/* Fault forensics: identify the log call being formatted if vsnprintf
+ * faults on a bad %s argument. Read by HardFault_Handler. */
+volatile const char * g_lastlog_file = NULL;
+volatile unsigned long g_lastlog_line = 0;
+volatile const char * g_lastlog_fmt = NULL;
+
 UART_HandleTypeDef * pxEarlyUart = NULL;
 
 static char pcPrintBuff[ dlMAX_LOG_LINE_LENGTH ];
@@ -183,6 +189,12 @@ void vLoggingPrintf( const char * const pcLogLevel,
     va_list args;
     const char * pcTaskName = NULL;
     BaseType_t xSchedulerWasSuspended = pdFALSE;
+
+    /* Fault forensics: if vsnprintf below faults on a bad %s argument, the
+     * HardFault handler prints these to identify the offending log call. */
+    g_lastlog_file = pcFileName;
+    g_lastlog_line = ulLineNumber;
+    g_lastlog_fmt = pcFormat;
 
     /* Additional info to place at the start of the log line */
     if( xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED )
