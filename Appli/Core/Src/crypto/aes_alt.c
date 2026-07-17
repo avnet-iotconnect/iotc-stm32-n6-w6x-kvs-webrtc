@@ -92,7 +92,10 @@ static int aes_set_key( mbedtls_aes_context *ctx,
     if( ctx == NULL || key == NULL )
         return MBEDTLS_ERR_AES_BAD_INPUT_DATA;
 
-    if( keybits != 128U && keybits != 256U )
+    /* CRYP (unlike SAES) supports all three AES key sizes. libsrtp's crypto
+     * kernel self-tests AES-ICM-192 at srtp_init(); rejecting 192 here aborts
+     * that init and every srtp_create() afterwards fails with init_fail. */
+    if( keybits != 128U && keybits != 192U && keybits != 256U )
         return MBEDTLS_ERR_AES_INVALID_KEY_LENGTH;
 
     ctx->keybits = keybits;
@@ -142,6 +145,7 @@ int mbedtls_aes_crypt_ecb( mbedtls_aes_context *ctx,
     cfg.DataType      = CRYP_BYTE_SWAP;
     cfg.DataWidthUnit = CRYP_DATAWIDTHUNIT_BYTE;
     cfg.KeySize       = ( ctx->keybits == 128U ) ? CRYP_KEYSIZE_128B
+                      : ( ctx->keybits == 192U ) ? CRYP_KEYSIZE_192B
                                                  : CRYP_KEYSIZE_256B;
     cfg.pKey          = ctx->aes_key;
     cfg.pInitVect     = NULL;
@@ -221,6 +225,7 @@ int mbedtls_aes_crypt_cbc( mbedtls_aes_context *ctx,
     cfg.DataType      = CRYP_BYTE_SWAP;
     cfg.DataWidthUnit = CRYP_DATAWIDTHUNIT_BYTE;
     cfg.KeySize       = ( ctx->keybits == 128U ) ? CRYP_KEYSIZE_128B
+                      : ( ctx->keybits == 192U ) ? CRYP_KEYSIZE_192B
                                                  : CRYP_KEYSIZE_256B;
     cfg.pKey          = ctx->aes_key;
     cfg.Algorithm     = CRYP_AES_CBC;

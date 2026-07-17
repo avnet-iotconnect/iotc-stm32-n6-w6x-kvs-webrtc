@@ -1694,7 +1694,17 @@ int AppCommon_Init( AppContext_t * pAppContext,
         memset( pAppContext, 0, sizeof( AppContext_t ) );
         memset( &sslCreds, 0, sizeof( SSLCredentials_t ) );
 
-        srtp_init();
+        {
+            srtp_err_status_t xSrtpStatus = srtp_init();
+            if( xSrtpStatus != srtp_err_status_ok )
+            {
+                /* A failed crypto-kernel init (e.g. a cipher known-answer
+                 * self-test failure) leaves the kernel insecure and every
+                 * later srtp_create() fails with init_fail. */
+                LogError( ( "srtp_init failed, status: %d — SRTP sessions will not work.",
+                            ( int ) xSrtpStatus ) );
+            }
+        }
 
         #if ENABLE_SCTP_DATA_CHANNEL
         Sctp_Init();

@@ -333,6 +333,11 @@ static srtp_err_status_t srtp_aes_icm_mbedtls_context_init(void *cv,
     errcode = mbedtls_aes_setkey_enc(c->ctx, key, key_size_in_bits);
     if (errcode != 0) {
         debug_print(srtp_mod_aes_icm, "errCode: %d", errcode);
+        /* Swallowing this error leaves the context keyed with garbage: the
+         * cipher then encrypts with the wrong key, which fails the crypto
+         * kernel's known-answer self-test and (worse) could silently produce
+         * wrong ciphertext at runtime. */
+        return srtp_err_status_init_fail;
     }
 
     return srtp_err_status_ok;
