@@ -31,17 +31,21 @@ extern "C" {
 #define IOTCL_ENDLN "\r\n"
 #endif
 
+/* err_code must be the FIRST printf argument (it satisfies the "IOTCL[%d]"
+ * prefix), so it has to be spliced between the format string and its args.
+ * Appending it after __VA_ARGS__ shifts every argument by one specifier,
+ * which feeds integers to %s (hard fault in strlen) and garbles %d logs. */
 #ifndef IOTCL_ERROR
-#define IOTCL_ERROR(err_code, ...) \
+#define IOTCL_ERROR(err_code, fmt, ...) \
     do { \
-        LogError("IOTCL[%d] " __VA_ARGS__, err_code); \
+        LogError("IOTCL[%d] " fmt, err_code, ##__VA_ARGS__); \
     } while(0)
 #endif
 
 #ifndef IOTCL_WARN
-#define IOTCL_WARN(err_code, ...) \
+#define IOTCL_WARN(err_code, fmt, ...) \
     do { \
-        LogWarn("IOTCL[%d] " __VA_ARGS__, err_code); \
+        LogWarn("IOTCL[%d] " fmt, err_code, ##__VA_ARGS__); \
     } while(0)
 #endif
 
