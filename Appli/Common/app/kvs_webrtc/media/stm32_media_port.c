@@ -191,8 +191,15 @@ static void prvMediaTask( void * pvParam )
      * have 100 ms/frame — use that budget for actual work, not tracing.
      * A coarse heartbeat every 30 frames remains for live-ness visibility. */
     uint32_t ulFrameNo = 0;
+    /* Stage timing, reported in the heartbeat as avg ms/frame: tells us
+     * whether the frame budget goes to VENC encode or to the network
+     * send path (TLS/TURN chunked sends) without per-frame tracing.     */
+    TickType_t xHbLastTick = xTaskGetTickCount();
+    uint32_t   ulEncTicks  = 0U;
+    uint32_t   ulSendTicks = 0U;
     while( pxCtx->ucRunning )
     {
+        TickType_t xStageT0;
         TickType_t xLoopStart = xTaskGetTickCount();
         vPetWatchdog();
 
@@ -213,11 +220,13 @@ static void prvMediaTask( void * pvParam )
 
         /* Encode from the completed (stable) NV12 pair.  VENC reads via
          * its AXI master bypassing the CPU cache — no invalidate needed. */
+        xStageT0 = xTaskGetTickCount();
         lEncodedLen = MediaEnc_EncodeFrame( xCamFrame.pY,
                                             xCamFrame.pUV,
                                             pxCtx->pucEncodedFrame,
                                             ENCODED_BUF_BYTES,
                                             0 /* no forced IDR */ );
+        ulEncTicks += ( uint32_t ) ( xTaskGetTickCount() - xStageT0 );
 
         if( lEncodedLen > 0 )
         {
@@ -232,7 +241,9 @@ static void prvMediaTask( void * pvParam )
 
             if( pxCtx->pfnOnVideoFrame != NULL )
             {
+                xStageT0 = xTaskGetTickCount();
                 ( void ) pxCtx->pfnOnVideoFrame( pxCtx->pvVideoCtx, &xFrame );
+                ulSendTicks += ( uint32_t ) ( xTaskGetTickCount() - xStageT0 );
             }
 
             ullTimestampUs += ulFramePeriodUs;
@@ -255,6 +266,18 @@ static void prvMediaTask( void * pvParam )
             mp_raw_puts( " heap=" ); mp_raw_dec( ( int ) xPortGetFreeHeapSize() );
             mp_raw_puts( " hwm=" ); mp_raw_dec( ( int ) uxTaskGetStackHighWaterMark( NULL ) );
             mp_raw_puts( " ovr=" ); mp_raw_dec( ( int ) g_dcmipp_ovr_count );
+            /* Avg ms/frame since last heartbeat: encode stage, send stage,
+             * and total frame period (1000/per = actual fps).             */
+            {
+                TickType_t xHbNow = xTaskGetTickCount();
+                uint32_t ulFrames = ( ulFrameNo == 0U ) ? 1U : 30U;
+                mp_raw_puts( " enc=" ); mp_raw_dec( ( int ) ( ulEncTicks / ulFrames ) );
+                mp_raw_puts( " snd=" ); mp_raw_dec( ( int ) ( ulSendTicks / ulFrames ) );
+                mp_raw_puts( " per=" ); mp_raw_dec( ( int ) ( ( uint32_t ) ( xHbNow - xHbLastTick ) / ulFrames ) );
+                xHbLastTick = xHbNow;
+                ulEncTicks = 0U;
+                ulSendTicks = 0U;
+            }
             mp_raw_puts( "\r\n" );
         }
 

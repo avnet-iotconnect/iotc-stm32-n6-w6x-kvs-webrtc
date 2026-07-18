@@ -34,6 +34,13 @@
 extern void vPetWatchdog( void );
 static inline void icn_raw_putc( char c )
 {
+    /* Hot-path raw UART trace: off by default (busy-wait UART writes
+     * serialize into the frame/send loop). Build with -DKVS_RAW_TRACE=1
+     * to re-enable for debugging. */
+#if !defined( KVS_RAW_TRACE ) || ( KVS_RAW_TRACE == 0 )
+    ( void ) c;
+    return;
+#endif
     for( uint32_t i = 0; i < 600000UL; i++ )
     {
         if( *(volatile uint32_t *)0x56000C1CUL & ( 1UL << 7 ) )
@@ -76,7 +83,10 @@ static void icn_raw_dec( int v )
 #define ICE_CONTROLLER_STUN_MESSAGE_TYPE_STRING_SEND_INDICATION "SEND_INDICATION"
 #define ICE_CONTROLLER_STUN_MESSAGE_TYPE_STRING_DATA_INDICATION "DATA_INDICATION"
 
-#define ICE_CONTROLLER_RESEND_DELAY_MS ( 50 )
+/* 5 ms: with TCP_SND_BUF sized to hold a whole encoded frame (see
+ * lwipopts.h) EAGAIN is rare, and when it does hit, a 50 ms sleep per
+ * retry dominated frame time on the TURN-TLS path. */
+#define ICE_CONTROLLER_RESEND_DELAY_MS ( 5 )
 #define ICE_CONTROLLER_RESEND_TIMEOUT_MS ( 1000 )
 
 static void GetLocalIPAdresses( IceEndpoint_t * pLocalIceEndpoints,

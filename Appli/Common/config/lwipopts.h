@@ -112,6 +112,22 @@
 #define LWIP_TCP                              1
 #define TCP_TTL                               255
 
+/* ---- TCP throughput tuning (2026-07-18) --------------------------------
+ * lwipopts_freertos.h (included above) sets TCP_MSS=1476 but only 4*MSS
+ * (~5.9 KB) of send buffer and a 6.4 KB lwIP heap.  An ~8 KB encoded
+ * video frame stalled the TURN-TLS send loop on EAGAIN/ERR_MEM every
+ * frame, each stall costing the ICE resend delay — measured in the media
+ * heartbeat as snd~400 ms/frame vs enc~24 ms, capping video at ~2.3 fps.
+ * Give the send path room for a couple of full frames in flight.
+ * (TCP_MSS stays 1476 from the port header; MEMP_NUM_TCP_SEG is already
+ * 255 there, comfortably above TCP_SND_QUEUELEN below.)                  */
+#undef  TCP_SND_BUF
+#define TCP_SND_BUF                           ( 16 * TCP_MSS )  /* ~23 KB */
+#undef  TCP_WND
+#define TCP_WND                               ( 8 * TCP_MSS )   /* ~11 KB */
+#undef  MEM_SIZE
+#define MEM_SIZE                              ( 48 * 1024 )
+
 /* Controls if TCP should queue segments that arrive out of
  * order. Define to 0 if your device is low on memory. */
 #define TCP_QUEUE_OOSEQ                       1

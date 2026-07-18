@@ -160,6 +160,14 @@ BaseType_t TCP_Sockets_Connect( Socket_t * pTcpSocket,
 
         if( connect( xFd, pxCur->ai_addr, pxCur->ai_addrlen ) == 0 )
         {
+            /* Disable Nagle: the TURN-TLS video path writes one small TLS
+             * record per RTP packet, and with Nagle + the peer's delayed
+             * ACK each record waited a full relay RTT before the next one
+             * left, serializing a video frame's ~8 records into hundreds
+             * of ms of send time. */
+            int xNoDelay = 1;
+            ( void ) setsockopt( xFd, IPPROTO_TCP, TCP_NODELAY,
+                                 &xNoDelay, sizeof( xNoDelay ) );
             xRet = TCP_SOCKETS_ERRNO_NONE;
             LogDebug( ( "Established TCP connection with %s.", pHostName ) );
             break;

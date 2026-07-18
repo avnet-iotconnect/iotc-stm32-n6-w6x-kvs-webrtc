@@ -38,6 +38,13 @@
 extern void vPetWatchdog( void );
 static inline void ic_raw_putc( char c )
 {
+    /* Hot-path raw UART trace: off by default (busy-wait UART writes
+     * serialize into the frame/send loop). Build with -DKVS_RAW_TRACE=1
+     * to re-enable for debugging. */
+#if !defined( KVS_RAW_TRACE ) || ( KVS_RAW_TRACE == 0 )
+    ( void ) c;
+    return;
+#endif
     for( uint32_t i = 0; i < 600000UL; i++ )
     {
         if( *(volatile uint32_t *)0x56000C1CUL & ( 1UL << 7 ) )
