@@ -54,6 +54,12 @@ extern CRYP_HandleTypeDef hcryp;
  * mid-operation and corrupt encryption for both. */
 static SemaphoreHandle_t xCrypMutex = NULL;
 
+/* ECB configuration cache: key material currently programmed into the
+ * CRYP peripheral (valid only while ulCrypEcbKeybits != 0).  Guarded by
+ * the CRYP mutex.  See mbedtls_aes_crypt_ecb for rationale. */
+static uint32_t ulCrypEcbKey[ 8 ];
+static uint32_t ulCrypEcbKeybits = 0U;
+
 static SemaphoreHandle_t prvGetCrypMutex( void )
 {
     if( xCrypMutex == NULL )
@@ -157,43 +163,71 @@ int mbedtls_aes_crypt_ecb( mbedtls_aes_context *ctx,
     if( ( xMutex == NULL ) || ( xSemaphoreTake( xMutex, portMAX_DELAY ) != pdTRUE ) )
         return MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
 
-    if( HAL_CRYP_DeInit( &hcryp ) != HAL_OK )
+    /* mbedtls GCM and libsrtp AES-ICM call this primitive once per 16-byte
+     * block; a full DeInit/Init/SetConfig per block cost ~0.5 ms each —
+     * ~300 ms of pure reconfiguration per ~10 KB TLS/SRTP payload.  The
+     * CRYP peripheral retains its key between operations, so reconfigure
+     * only when the key material actually changes.  The cache is keyed on
+     * the key itself (a ctx pointer can be reused after free) and lives
+     * under the CRYP mutex.  The CBC path below reprograms the peripheral
+     * (per-call IV) and invalidates this cache. */
+    if( ( ulCrypEcbKeybits != ctx->keybits ) ||
+        ( memcmp( ulCrypEcbKey, ctx->aes_key, ctx->keybits / 8U ) != 0 ) )
     {
-        ret = MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
-    }
-    else
-    {
-        hcryp.Instance = CRYP;
-        if( HAL_CRYP_Init( &hcryp ) != HAL_OK )
-        {
-            ret = MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
-        }
-        else if( HAL_CRYP_SetConfig( &hcryp, &cfg ) != HAL_OK )
+        ulCrypEcbKeybits = 0U;
+
+        if( HAL_CRYP_DeInit( &hcryp ) != HAL_OK )
         {
             ret = MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
         }
         else
         {
-            HAL_StatusTypeDef st;
-
-            if( mode == MBEDTLS_AES_ENCRYPT )
+            hcryp.Instance = CRYP;
+            if( HAL_CRYP_Init( &hcryp ) != HAL_OK )
             {
-                st = HAL_CRYP_Encrypt( &hcryp,
-                                       (uint32_t *) input,
-                                       16U,
-                                       output,
-                                       HAL_MAX_DELAY );
+                ret = MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
+            }
+            else if( HAL_CRYP_SetConfig( &hcryp, &cfg ) != HAL_OK )
+            {
+                ret = MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
             }
             else
             {
-                st = HAL_CRYP_Decrypt( &hcryp,
-                                       (uint32_t *) input,
-                                       16U,
-                                       output,
-                                       HAL_MAX_DELAY );
+                memcpy( ulCrypEcbKey, ctx->aes_key, ctx->keybits / 8U );
+                ulCrypEcbKeybits = ctx->keybits;
             }
+        }
+    }
 
-            ret = ( st == HAL_OK ) ? 0 : MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
+    if( ret == 0 )
+    {
+        HAL_StatusTypeDef st;
+
+        if( mode == MBEDTLS_AES_ENCRYPT )
+        {
+            st = HAL_CRYP_Encrypt( &hcryp,
+                                   (uint32_t *) input,
+                                   16U,
+                                   output,
+                                   HAL_MAX_DELAY );
+        }
+        else
+        {
+            st = HAL_CRYP_Decrypt( &hcryp,
+                                   (uint32_t *) input,
+                                   16U,
+                                   output,
+                                   HAL_MAX_DELAY );
+
+            /* ECB decrypt runs the CRYP key-derivation phase; do not trust
+             * the key registers for a subsequent cached encrypt. */
+            ulCrypEcbKeybits = 0U;
+        }
+
+        if( st != HAL_OK )
+        {
+            ret = MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
+            ulCrypEcbKeybits = 0U;
         }
     }
 
@@ -255,6 +289,10 @@ int mbedtls_aes_crypt_cbc( mbedtls_aes_context *ctx,
 
     if( ( xMutex == NULL ) || ( xSemaphoreTake( xMutex, portMAX_DELAY ) != pdTRUE ) )
         return MBEDTLS_ERR_PLATFORM_HW_ACCEL_FAILED;
+
+    /* CBC reprograms the peripheral (per-call IV): the ECB config cache
+     * no longer matches whatever this call leaves behind. */
+    ulCrypEcbKeybits = 0U;
 
     if( HAL_CRYP_DeInit( &hcryp ) != HAL_OK )
     {
