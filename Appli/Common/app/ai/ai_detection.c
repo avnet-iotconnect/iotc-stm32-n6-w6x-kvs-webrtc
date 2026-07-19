@@ -31,6 +31,7 @@
 #include "stai_network.h"
 #include "npu_cache.h"
 #include "app_postprocess.h"
+#include "od_yolov2_pp_if.h"
 
 #include "ai_detection.h"
 
@@ -167,15 +168,13 @@ static void prvRunInference( stai_network * pxNet )
 static void prvAiTask( void * pvParam )
 {
     stai_network_info xInfo;
-    postprocess_out_t xPpOut;
-    void * pvPpParams = NULL;
-    static od_pp_out_t xOdOut;   /* type per app_postprocess.h */
+    static od_pp_out_t xPpOut;                        /* detection results   */
+    static od_yolov2_pp_static_param_t xPpParams;     /* postprocess config  */
     int ret;
     uint32_t ulInferences = 0U;
     TickType_t xLastLog = 0;
 
     ( void ) pvParam;
-    ( void ) xOdOut;
 
     ret = stai_runtime_init();
     configASSERT( ret == STAI_SUCCESS );
@@ -186,10 +185,8 @@ static void prvAiTask( void * pvParam )
     configASSERT( xInfo.n_inputs == 1 );
     configASSERT( xInfo.outputs[ 0 ].size_bytes <= AI_OUT_BUFFER_MAX_BYTES );
 
-    static app_postprocess_params_t xPpParams;
     ret = app_postprocess_init( &xPpParams, &xInfo );
     configASSERT( ret == 0 );
-    pvPpParams = &xPpParams;
 
     LogInfo( "[AI] network ready: in %dx%dx%d, out %u bytes",
              AI_NN_WIDTH, AI_NN_HEIGHT, AI_NN_BPP,
@@ -222,16 +219,16 @@ static void prvAiTask( void * pvParam )
         prvRunInference( ( stai_network * ) network_ctx );
         ulInferences++;
 
-        memset( &xPpOut, 0, sizeof( xPpOut ) );
         ret = app_postprocess_run( ( void * [] ) { ucNnOutputBuf }, 1,
-                                   &xPpOut, pvPpParams );
+                                   &xPpOut, &xPpParams );
 
-        /* Phase 3: throttled logging of the detection count (telemetry in
-         * Phase 4). */
+        /* Phase 3: throttled logging of detection count (telemetry Phase 4). */
         if( ( xTaskGetTickCount() - xLastLog ) > pdMS_TO_TICKS( 2000 ) )
         {
             xLastLog = xTaskGetTickCount();
-            LogInfo( "[AI] inferences=%u pp_ret=%d", ( unsigned ) ulInferences, ret );
+            LogInfo( "[AI] inferences=%u dets=%d pp_ret=%d",
+                     ( unsigned ) ulInferences,
+                     ( int ) xPpOut.nb_detect, ret );
         }
     }
 }

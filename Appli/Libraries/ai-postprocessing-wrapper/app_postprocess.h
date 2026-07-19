@@ -24,6 +24,12 @@ extern "C"
 {
 #endif
 
+/* This firmware already has a Core/Inc/app_config.h (KVS streaming config)
+ * that shadows the donor's app_config.h on the include path, so the model
+ * selection would otherwise never reach the wrapper TUs.  Pull the
+ * postprocess config (POSTPROCESS_TYPE + thresholds) in directly. */
+#include "postprocess_conf.h"
+
 #include "stai.h"
 
 #include "od_yolov2_pp_if.h"
