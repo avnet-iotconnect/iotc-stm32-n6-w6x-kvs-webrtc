@@ -1,6 +1,6 @@
 {
-    "code": "stm32n6wrt",
-    "name": "STM32N6 W6X KVS WebRTC",
+    "code": "stm32n6wr2",
+    "name": "STM32N6 W6X KVS WebRTC 2",
     "authType": 2,
     "attributes": [
         {
@@ -60,8 +60,15 @@
     ],
     "commands": [
         {
-            "name": "Turn All LEDs On",
-            "command": "LED_ALL_ON",
+            "name": "Turn All LEDs Off",
+            "command": "LED_ALL_OFF",
+            "requiredParam": false,
+            "requiredAck": true,
+            "isOTACommand": false
+        },
+        {
+            "name": "Turn Red LED Off",
+            "command": "LED_RED_OFF",
             "requiredParam": false,
             "requiredAck": true,
             "isOTACommand": false
@@ -88,28 +95,21 @@
             "isOTACommand": false
         },
         {
-            "name": "Turn All LEDs Off",
-            "command": "LED_ALL_OFF",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        },
-        {
-            "name": "Turn Red LED Off",
-            "command": "LED_RED_OFF",
+            "name": "Turn All LEDs On",
+            "command": "LED_ALL_ON",
             "requiredParam": false,
             "requiredAck": true,
             "isOTACommand": false
         }
     ],
     "messageVersion": "2.1",
-    "msgCode": "XG4ETWH",
+    "msgCode": "XG4EGET",
     "capability": "0",
     "c2dOnDemand": 0,
     "properties": {
         "description": "STM32N6 W6X IoT reference with KVS WebRTC video streaming.",
         "dataFrequency": "5",
-        "fileSupport": true,
+        "fileSupport": false,
         "videoStreamResource": "2",
         "videoStreamType": "3",
         "autoStartVideoStream": false,
