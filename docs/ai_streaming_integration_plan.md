@@ -1,5 +1,23 @@
 # AI + KVS WebRTC Streaming Integration Plan
 
+> **2026-07-18 scope update: LCD preview is REQUIRED** (user decision —
+> same experience as the iotc-stm32-n6-demos AI examples).  Adopt the
+> donor's media architecture instead of grafting around our NV12 path:
+> PIPE1 → RGB888 at display resolution (800x480) → shared framebuffer →
+> (a) LTDC displays it, (b) detection boxes are drawn into it (donor
+> draw.c), (c) VENC encodes it (H264ENC_RGB888 input, as donor app_enc.c)
+> — so overlays appear on the LCD **and** in the cloud stream.  PIPE2 →
+> NPU unchanged.  Bandwidth: 800x480 RGB888 ≈ 17 MB/s DCMIPP write +
+> 17 MB/s VENC read + ~69 MB/s LTDC refresh — the donor sustains exactly
+> this mix; our failed April config (1280x720 ARGB8888, 54 MB/s DCMIPP
+> alone) was ~2.6x heavier.  This REPLACES the "no display" assumption
+> below; media_cam/media_enc largely re-port from donor app_cam/app_enc,
+> plus LTDC/BSP init and draw.c.  New phase order: 1 scaffold (done),
+> 1b AI-enabled build, 2 Pipe2+NPU bring-up (no display yet), 3 telemetry,
+> 4 display re-port (PIPE1 RGB + LTDC + draw overlay + VENC RGB input),
+> 5 combined soak.  Phases 2-3 stay verifiable on the current NV12 path
+> before the display rework lands.
+
 Goal: one HW_Crypto firmware that runs NPU object detection AND streams
 640x480 H.264 via KVS WebRTC, publishing detections as IOTCONNECT telemetry
 (and optionally overlaying boxes in the encoded video later).
