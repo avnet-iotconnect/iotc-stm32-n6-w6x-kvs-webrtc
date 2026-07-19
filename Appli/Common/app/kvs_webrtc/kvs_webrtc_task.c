@@ -32,7 +32,8 @@
 #include "logging.h"
 
 #include "sys_evt.h"              /* EVT_MASK_NET_CONNECTED, xSystemEvents   */
-#include "kvstore.h"              /* KVStore_getStringHeap, CS_KVS_*         */
+#include "kvstore.h"              /* KVStore_getStringHeap, CS_KVS_* */
+#include "../ai/ai_detection.h"
 #include "freertos_hooks.h"       /* vPetWatchdog()                          */
 
 #include "BackoffAlgorithm.h"
@@ -556,6 +557,9 @@ void vKvsWebRtcTask( void * pvParameters )
 
         memset( &xAppContext,            0, sizeof( xAppContext ) );
         memset( &xAppMediaSourceContext, 0, sizeof( xAppMediaSourceContext ) );
+
+        /* NPU object detection (no-op unless ENABLE_AI_DETECTION). */
+        AiDetection_Init();
 
         vPetWatchdog();
         LogInfo( "[KVSWebRTC] Calling AppMediaSource_Init..." );

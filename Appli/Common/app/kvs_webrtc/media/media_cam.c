@@ -13,6 +13,7 @@
 #include "media_cam.h"
 #include "media_cam_config.h"   /* sensor / venc dimension macros          */
 #include "cmw_camera.h"
+#include "../../ai/ai_detection.h"
 #include "isp_core.h"            /* ISP_SensorInfoTypeDef                   */
 #include "FreeRTOS.h"            /* vPetWatchdog() declared in FreeRTOSConfig.h */
 #include "task.h"                /* vTaskDelay for post-start poll loop     */
@@ -159,6 +160,9 @@ static void prvDCMIPP_PipeInitEncoder( int lSensorW, int lSensorH )
     ret = CMW_CAMERA_SetPipeConfig( DCMIPP_PIPE1, &xConf, &ulPitch );
     assert( ret == HAL_OK );
     assert( ulPitch == ( uint32_t )( xConf.output_width * xConf.output_bpp ) );
+
+    /* PIPE2 -> NPU model input (no-op unless ENABLE_AI_DETECTION). */
+    AiDetection_PipeInit( lSensorW, lSensorH );
 }
 
 static void prvDCMIPP_IpPlugInit( DCMIPP_HandleTypeDef * pxHdcmipp )
@@ -623,6 +627,9 @@ void MediaCam_Stop( void )
     DCMIPP_HandleTypeDef * pxH = CMW_CAMERA_GetDCMIPPHandle();
     HAL_StatusTypeDef      rc;
 
+    /* Stop the NPU input pipe first (no-op unless ENABLE_AI_DETECTION). */
+    AiDetection_PipeStop();
+
     raw_puts( "[CAM] Stop>\r\n" );
 
     /* If the pipe is in ERROR state (e.g. from an OVR that permanently
@@ -923,6 +930,12 @@ HAL_StatusTypeDef MX_DCMIPP_ClockConfig( DCMIPP_HandleTypeDef * pxHdcmipp )
  * and worsening AXI contention that likely precipitated DCMIPP OVR events. */
 int CMW_CAMERA_PIPE_FrameEventCallback( uint32_t ulPipe )
 {
+    if( ulPipe == DCMIPP_PIPE2 )
+    {
+        /* NPU model-input pipe (no-op unless ENABLE_AI_DETECTION). */
+        AiDetection_FrameDoneISR();
+    }
+
     if( ( ulPipe == DCMIPP_PIPE1 ) && ( xFrameReadySem != NULL ) )
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
