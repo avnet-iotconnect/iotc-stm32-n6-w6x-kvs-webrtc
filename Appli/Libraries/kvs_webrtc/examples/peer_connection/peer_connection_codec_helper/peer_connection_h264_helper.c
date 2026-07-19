@@ -35,6 +35,15 @@ static inline void h264_raw_putc( char c )
 }
 static void h264_raw_puts( const char *s ) { while( *s ) h264_raw_putc( *s++ ); }
 
+/* Send-path stage timing, reported by the media heartbeat
+ * (stm32_media_port.c) as avg ms/frame: splits the frame's network cost
+ * into SRTP construct+encrypt vs ICE (TURN-TLS) send while chasing the
+ * frame-size-independent ~300 ms/frame send wait.  Written only on the
+ * media task's synchronous frame path — no locking needed. */
+volatile uint32_t g_h264SrtpTicks = 0U;
+volatile uint32_t g_h264SendTicks = 0U;
+volatile uint32_t g_h264PacketCount = 0U;
+
 PeerConnectionResult_t PeerConnectionH264Helper_GetH264PacketProperty( PeerConnectionJitterBufferPacket_t * pPacket,
                                                                        uint8_t * pIsStartPacket )
 {
@@ -354,10 +363,14 @@ PeerConnectionResult_t PeerConnectionH264Helper_WriteH264Frame( PeerConnectionSe
             pRollingBufferPacket->rtpPacket.pPayload = packetH264.pPacketData;
 
             /* PeerConnectionSrtp_ConstructSrtpPacket() serializes RTP packet and encrypt it. */
-            ret = PeerConnectionSrtp_ConstructSrtpPacket( pSession,
-                                                          &pRollingBufferPacket->rtpPacket,
-                                                          pSrtpPacket,
-                                                          &srtpPacketLength );
+            {
+                TickType_t xSrtpT0 = xTaskGetTickCount();
+                ret = PeerConnectionSrtp_ConstructSrtpPacket( pSession,
+                                                              &pRollingBufferPacket->rtpPacket,
+                                                              pSrtpPacket,
+                                                              &srtpPacketLength );
+                g_h264SrtpTicks += ( uint32_t ) ( xTaskGetTickCount() - xSrtpT0 );
+            }
         }
         else
         {
@@ -393,9 +406,12 @@ PeerConnectionResult_t PeerConnectionH264Helper_WriteH264Frame( PeerConnectionSe
         /* Write the constructed RTP packets through network. */
         if( ret == PEER_CONNECTION_RESULT_OK )
         {
+            TickType_t xSendT0 = xTaskGetTickCount();
             resultIceController = IceController_SendToRemotePeer( &pSession->iceControllerContext,
                                                                   pSrtpPacket,
                                                                   srtpPacketLength );
+            g_h264SendTicks += ( uint32_t ) ( xTaskGetTickCount() - xSendT0 );
+            g_h264PacketCount++;
             if( resultIceController != ICE_CONTROLLER_RESULT_OK )
             {
                 LogWarn( ( "Fail to send RTP packet, ret: %d", resultIceController ) );

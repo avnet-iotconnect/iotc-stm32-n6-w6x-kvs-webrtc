@@ -274,6 +274,19 @@ static void prvMediaTask( void * pvParam )
                 mp_raw_puts( " enc=" ); mp_raw_dec( ( int ) ( ulEncTicks / ulFrames ) );
                 mp_raw_puts( " snd=" ); mp_raw_dec( ( int ) ( ulSendTicks / ulFrames ) );
                 mp_raw_puts( " per=" ); mp_raw_dec( ( int ) ( ( uint32_t ) ( xHbNow - xHbLastTick ) / ulFrames ) );
+                /* snd sub-stages from the H.264 send path (avg ms/frame,
+                 * plus avg RTP packets/frame). */
+                {
+                    extern volatile uint32_t g_h264SrtpTicks;
+                    extern volatile uint32_t g_h264SendTicks;
+                    extern volatile uint32_t g_h264PacketCount;
+                    mp_raw_puts( " srtp=" ); mp_raw_dec( ( int ) ( g_h264SrtpTicks / ulFrames ) );
+                    mp_raw_puts( " isnd=" ); mp_raw_dec( ( int ) ( g_h264SendTicks / ulFrames ) );
+                    mp_raw_puts( " pkt=" );  mp_raw_dec( ( int ) ( g_h264PacketCount / ulFrames ) );
+                    g_h264SrtpTicks = 0U;
+                    g_h264SendTicks = 0U;
+                    g_h264PacketCount = 0U;
+                }
                 xHbLastTick = xHbNow;
                 ulEncTicks = 0U;
                 ulSendTicks = 0U;
