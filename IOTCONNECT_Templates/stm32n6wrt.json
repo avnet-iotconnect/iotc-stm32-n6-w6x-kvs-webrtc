@@ -9,6 +9,7 @@
             "type": "STRING",
             "description": "Firmware-reported demo mode identifier.",
             "unit": "",
+            "attributeColor": "",
             "aggregateTypes": []
         },
         {
@@ -17,6 +18,7 @@
             "type": "STRING",
             "description": "Application firmware version reported by the device.",
             "unit": "",
+            "attributeColor": "",
             "aggregateTypes": []
         },
         {
@@ -25,6 +27,7 @@
             "type": "BOOLEAN",
             "description": "Current red LED state.",
             "unit": "",
+            "attributeColor": "",
             "aggregateTypes": []
         },
         {
@@ -33,6 +36,7 @@
             "type": "BOOLEAN",
             "description": "Current green LED state.",
             "unit": "",
+            "attributeColor": "",
             "aggregateTypes": []
         },
         {
@@ -41,6 +45,7 @@
             "type": "BOOLEAN",
             "description": "Current user button state.",
             "unit": "",
+            "attributeColor": "",
             "aggregateTypes": []
         },
         {
@@ -49,17 +54,11 @@
             "type": "STRING",
             "description": "Version string reported in sample mode.",
             "unit": "",
+            "attributeColor": "",
             "aggregateTypes": []
         }
     ],
     "commands": [
-        {
-            "name": "Turn All LEDs Off",
-            "command": "LED_ALL_OFF",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        },
         {
             "name": "Turn All LEDs On",
             "command": "LED_ALL_ON",
@@ -70,13 +69,6 @@
         {
             "name": "Turn Red LED On",
             "command": "LED_RED_ON",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        },
-        {
-            "name": "Turn Red LED Off",
-            "command": "LED_RED_OFF",
             "requiredParam": false,
             "requiredAck": true,
             "isOTACommand": false
@@ -94,19 +86,32 @@
             "requiredParam": false,
             "requiredAck": true,
             "isOTACommand": false
+        },
+        {
+            "name": "Turn All LEDs Off",
+            "command": "LED_ALL_OFF",
+            "requiredParam": false,
+            "requiredAck": true,
+            "isOTACommand": false
+        },
+        {
+            "name": "Turn Red LED Off",
+            "command": "LED_RED_OFF",
+            "requiredParam": false,
+            "requiredAck": true,
+            "isOTACommand": false
         }
     ],
     "messageVersion": "2.1",
-    "msgCode": "XG4E2G2",
+    "msgCode": "XG4ETWH",
     "capability": "0",
-    "enableCSR": "false",
     "c2dOnDemand": 0,
     "properties": {
         "description": "STM32N6 W6X IoT reference with KVS WebRTC video streaming.",
         "dataFrequency": "5",
-        "fileSupport": false,
-        "videoStreamResource": "1",
-        "videoStreamType": "2",
+        "fileSupport": true,
+        "videoStreamResource": "2",
+        "videoStreamType": "3",
         "autoStartVideoStream": false,
         "certRenewalDay": 0,
         "enableCSR": false
