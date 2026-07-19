@@ -1,0 +1,77 @@
+# AI + KVS WebRTC Streaming Integration Plan
+
+Goal: one HW_Crypto firmware that runs NPU object detection AND streams
+640x480 H.264 via KVS WebRTC, publishing detections as IOTCONNECT telemetry
+(and optionally overlaying boxes in the encoded video later).
+
+## Why this is feasible
+
+ST's **x-cube-n6-ai-h264-usb-uvc** package (local copy:
+`c:\dev\slim\x-cube-n6-ai-h264-usb-uvc`) already runs DCMIPP + NPU (ATON)
++ VENC concurrently on this exact board — it is the architecture donor.
+The demos repo (`iotc-stm32-n6-demos`) `uvc` sample carries the IOTCONNECT
+telemetry glue for its detections (`Src/app.c`), and this firmware already
+has camera→VENC (Pipe1, NV12 640x480) plus the full IOTCONNECT/iotcl path.
+
+## Architecture
+
+- **DCMIPP Pipe1** (existing): sensor → downscale → NV12 640x480 → VENC →
+  RTP/SRTP → KVS.  Unchanged.
+- **DCMIPP Pipe2** (new): same sensor exposure → downscale to model input
+  (e.g. 224x224 or model-native) RGB888 → NPU input buffer.
+- **NPU (ATON/LL_ATON)**: object-detection network from the ST model zoo
+  (same one the demos repo uses), weights placed per the uvc package's
+  linker layout.
+- **Detections task**: postprocess → throttle (e.g. 1-2 Hz or on-change) →
+  `iotcl` telemetry (`d2c_rpt`) using the existing MQTT agent.  Template
+  needs new attributes (class/conf/box) — extend `stm32n6wrt` template.
+
+## Known constraints (measured this week — do not rediscover)
+
+- PSRAM/AXI bandwidth is the scarce resource: 720p NV12 already stalled
+  VENC (see `media_cam_config.h` history).  Pipe2 adds ~224*224*3*15fps
+  ≈ 2.3 MB/s — small, but re-verify `ovr=` stays 0 in the `[M]` heartbeat.
+- Heap floor during streaming ≈ 230 KB free; NPU activations must come
+  from a dedicated pool (uvc package pattern), NOT the FreeRTOS heap.
+- Build config: HW_Crypto at -O2 (dev @ f36fa6d).  Encoder 1 Mbps.
+- Send path sustains ~9.5 fps; AI must not add >10 ms/frame to the media
+  task loop (`enc=` heartbeat field will show it).
+
+## Phases
+
+1. **Scaffold**: copy NPU init + Pipe2 setup + model files from
+   x-cube-n6-ai-h264-usb-uvc into `Appli/Common/app/ai/` behind an
+   `ENABLE_AI_DETECTION` build define (default off) — firmware must still
+   build+stream with it off.
+2. **Pipe2 bring-up**: Pipe2 frames landing in the NPU input buffer;
+   verify with a Y-mean probe; heartbeat gains `ai=` ms/frame field.
+3. **NPU inference**: run the network on Pipe2 frames in a low-priority
+   task; log top detection.
+4. **Telemetry**: detections → iotcl JSON; extend the IOTCONNECT template
+   (`IOTCONNECT_Templates/stm32n6wrt.json`) with detection attributes.
+5. **Verify**: stream + detect simultaneously for 10+ min; heartbeat
+   `ovr=0`, heap flat, fps unchanged (~9.5).
+6. (Later) box overlay into NV12 before VENC; demos-repo doc updates.
+
+## Donor survey results (Phase 1 inputs)
+
+- `Src/app_cam.c`: `DCMIPP_PipeInitDisplay` (PIPE1) + `DCMIPP_PipeInitNn`
+  (PIPE2) side by side; `CAM_NNPipe_Start(nn_pipe_dst, mode)` starts PIPE2.
+  → graft the PipeInitNn/NNPipe_Start pattern into our `media_cam.c`.
+- `Src/app.c`: ST Edge AI runtime (`stai_network_*`), `network_ctx`
+  (STAI_NETWORK_CONTEXT_SIZE, ALIGN_32), `nn_input_buffers[2]` in PSRAM,
+  `bqueue` producer = PIPE2 vsync callback (`HAL_DCMIPP_PIPE_SetMemoryAddress`
+  per frame), consumer = inference thread → postprocess (`Lib/lib_vision_models_pp`).
+- `Model/`: `network.c`, `stai_network.{c,h}`, `network_data.hex`,
+  `network_ecblobs.h` (dir 41 MB); `Lib/` 63 MB (copy only ATON runtime +
+  pp lib subset).  Check donor GCC linker script for weight placement and
+  `app_fuseprogramming.c`/NPU clock init in its `main.c`.
+- NN input dims come from `NN_WIDTH/NN_HEIGHT/NN_BPP` defines — find in Inc/.
+
+## Session log
+
+- 2026-07-18: plan written; donor surveyed (above).  No code changes yet.
+  Board/dev at stable f36fa6d.  Next concrete step: create
+  `Appli/Common/app/ai/` with bqueue+nn-task skeleton behind
+  ENABLE_AI_DETECTION (default off), copy Model/ + minimal Lib subset,
+  add PIPE2 init to media_cam.c, NPU clocks to main.c, weights to linker.
