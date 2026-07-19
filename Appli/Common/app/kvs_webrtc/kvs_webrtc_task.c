@@ -72,7 +72,10 @@ const char * pcKvsIotThingCert         = "";
 const char * pcKvsIotPrivateKey        = "";
 
 /* ── Private state ──────────────────────────────────────────────────────── */
-static AppContext_t              xAppContext;
+/* ~1 MB — placed in external PSRAM (.psram_bss, NOLOAD) to free AXISRAM3-6
+ * for the NPU activation pools (network.c bakes them at 0x34200000-0x343BFFF8).
+ * PSRAM must be initialised (MediaPort_EnsurePsram) before first touch. */
+static AppContext_t              xAppContext __attribute__( ( section( ".psram_bss" ), aligned( 32 ) ) );
 static AppMediaSourcesContext_t  xAppMediaSourceContext;
 
 /* KVStore heap strings — freed on each reconnect attempt */
@@ -554,6 +557,11 @@ void vKvsWebRtcTask( void * pvParameters )
                 hook_raw_putc( *p );
             }
         }
+
+        /* xAppContext lives in PSRAM (.psram_bss, NOLOAD): bring PSRAM up
+         * before zeroing it.  Idempotent — media init calls it again. */
+        extern void MediaPort_EnsurePsram( void );
+        MediaPort_EnsurePsram();
 
         memset( &xAppContext,            0, sizeof( xAppContext ) );
         memset( &xAppMediaSourceContext, 0, sizeof( xAppMediaSourceContext ) );

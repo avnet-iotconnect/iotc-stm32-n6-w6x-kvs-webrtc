@@ -5,13 +5,24 @@
 ** Custom linker script for the KVS WebRTC / HW_Crypto build.
 **
 ** Memory layout (AXISRAM 0x34000000-0x343BFFFF = 3792K total):
-**   ROM  (code+rodata) : 0x34000400, 1536K  (~1.4MB used, 100K headroom)
-**   RAM  (data+bss)    : 0x34180400, 2304K  (extends through SRAM5+SRAM6)
-**   EXTRAM (PSRAM via XSPI2) : 0x90000000, 16MB  (for .psram_bss NOLOAD)
+**   ROM  (code+rodata) : 0x34000400, 0x109000 (~1051K used, ~8K headroom)
+**   RAM  (data+bss)    : 0x34109400, to 0x34200000 (~980K used, ~8K headroom)
+**   AXISRAM3-6 0x34200000-0x343BFFF8: RESERVED for NPU activation pools —
+**     network.c bakes these addresses in (npuRAM3-6).  The app MUST NOT
+**     extend past 0x34200000 or inference corrupts live app memory.
+**     (2026-07-19: RAM previously spanned SRAM3-6 with the stack at
+**     0x34300400 — inference would have scribbled over heap + ISR stack.
+**     xAppContext (~1MB) and the AI ec-blob staging array moved to PSRAM
+**     to make the app fit in AXISRAM1+2.  Margins are thin: link fails
+**     loudly on overflow — if that happens, move more cold .bss to
+**     .psram_bss rather than growing past 0x34200000.)
+**   EXTRAM (PSRAM APS256XX via XSPI1) : 0x90000000, 16MB (.psram_bss NOLOAD)
 **
-** .psram_bss is placed in EXTRAM with NOLOAD so its 4MB allocation does NOT
-** create a load image in ROM or RAM.  The PSRAM must be initialised by the
-** bootloader (ExtMemLoader) before the application runs.
+** .psram_bss is placed in EXTRAM with NOLOAD so its allocation does NOT
+** create a load image in ROM or RAM.  PSRAM is initialised at runtime by
+** MediaPort_EnsurePsram()/AppMediaSourcePort_Init() — .psram_bss content is
+** NOT zeroed at startup; every symbol there must be fully written before
+** first read (xAppContext is memset after MediaPort_EnsurePsram()).
 ******************************************************************************
 */
 
@@ -25,8 +36,8 @@ _Min_Stack_Size = 0x800;
 
 MEMORY
 {
-  ROM    (xrw) : ORIGIN = 0x34000400, LENGTH = 1536K
-  RAM    (xrw) : ORIGIN = 0x34180400, LENGTH = 0x23FC00  /* ends at 0x343C0000 = end of SRAM6_AXI */
+  ROM    (xrw) : ORIGIN = 0x34000400, LENGTH = 0x109000  /* AXISRAM1(+2 start) */
+  RAM    (xrw) : ORIGIN = 0x34109400, LENGTH = 0xF6C00   /* ends 0x34200000 = start of NPU-reserved SRAM3 */
   EXTRAM (rw)  : ORIGIN = 0x90000000, LENGTH = 16M
 }
 

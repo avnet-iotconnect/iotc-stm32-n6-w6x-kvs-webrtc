@@ -61,8 +61,9 @@ static volatile uint8_t  ucReadyIdx    = 0U;
 static SemaphoreHandle_t xFrameReady   = NULL;
 static volatile uint8_t  ucPipeRunning = 0U;
 
-/* ── NPU bring-up (from donor main.c; RAMCFG for AXISRAM3-6 is already
- *    done by this firmware's system init — repeating it is harmless) ───── */
+/* ── NPU bring-up (from donor main.c).  AXISRAM3-6 clocks are enabled by
+ *    FSBL/system init (RCC MEMENSR); those RAMs are reserved for the NPU
+ *    activation pools by the linker map — see STM32N657X0HXQ_LRUN_kvs.ld. ── */
 static void prvNpuEnable( void )
 {
     __HAL_RCC_NPU_CLK_ENABLE();
@@ -165,6 +166,17 @@ static void prvRunInference( stai_network * pxNet )
     ( void ) stai_ext_network_new_inference( pxNet );
 }
 
+/* On failure: log and park the task (NOT configASSERT — its while(1) spin
+ * burned 30-60% CPU alongside streaming when init hung).  Streaming must
+ * survive any AI init failure. */
+#define AI_CHECK( cond, tag )                                        \
+    do {                                                             \
+        if( !( cond ) ) {                                            \
+            LogError( "[AI] init failed at %s (ret=%d) - AI disabled", tag, ret ); \
+            for( ; ; ) { vTaskSuspend( NULL ); }                     \
+        }                                                            \
+    } while( 0 )
+
 static void prvAiTask( void * pvParam )
 {
     stai_network_info xInfo;
@@ -176,17 +188,45 @@ static void prvAiTask( void * pvParam )
 
     ( void ) pvParam;
 
+    /* The model weights + ec blobs live in NOR flash at 0x70380000 and are
+     * read through the XSPI2 memory-mapped window by both the CPU (ec blob
+     * copy during network init) and the NPU (weight fetch during inference).
+     * The littlefs OSPI driver runs XSPI2 in INDIRECT command mode, which
+     * may have torn the mapping down — probe before touching stai, because
+     * init against an unmapped/garbage window hangs with no diagnostic. */
+    LogInfo( "[AI] XSPI1 CR=%08lx XSPI2 CR=%08lx", XSPI1->CR, XSPI2->CR );
+
+    if( ( XSPI2->CR & XSPI_CR_FMODE_Msk ) != XSPI_CR_FMODE_Msk )
+    {
+        LogError( "[AI] XSPI2 not memory-mapped (FMODE=%lu) - weights at "
+                  "0x70380000 unreachable; AI disabled",
+                  ( XSPI2->CR & XSPI_CR_FMODE_Msk ) >> XSPI_CR_FMODE_Pos );
+        for( ; ; ) { vTaskSuspend( NULL ); }
+    }
+
+    {
+        volatile const uint32_t * pulW = ( volatile const uint32_t * ) 0x70380000UL;
+        LogInfo( "[AI] weights probe: %08lx %08lx %08lx %08lx",
+                 pulW[ 0 ], pulW[ 1 ], pulW[ 2 ], pulW[ 3 ] );
+    }
+
+    LogInfo( "[AI] stai_runtime_init..." );
     ret = stai_runtime_init();
-    configASSERT( ret == STAI_SUCCESS );
+    LogInfo( "[AI] stai_runtime_init ret=%d", ret );
+    AI_CHECK( ret == STAI_SUCCESS, "runtime_init" );
+
+    LogInfo( "[AI] stai_network_init..." );
     ret = stai_network_init( ( stai_network * ) network_ctx );
-    configASSERT( ret == STAI_SUCCESS );
+    LogInfo( "[AI] stai_network_init ret=%d", ret );
+    AI_CHECK( ret == STAI_SUCCESS, "network_init" );
+
     ret = stai_network_get_info( ( stai_network * ) network_ctx, &xInfo );
-    configASSERT( ret == STAI_SUCCESS );
-    configASSERT( xInfo.n_inputs == 1 );
-    configASSERT( xInfo.outputs[ 0 ].size_bytes <= AI_OUT_BUFFER_MAX_BYTES );
+    AI_CHECK( ret == STAI_SUCCESS, "get_info" );
+    AI_CHECK( xInfo.n_inputs == 1, "n_inputs" );
+    AI_CHECK( xInfo.outputs[ 0 ].size_bytes <= AI_OUT_BUFFER_MAX_BYTES, "out_size" );
 
     ret = app_postprocess_init( &xPpParams, &xInfo );
-    configASSERT( ret == 0 );
+    AI_CHECK( ret == 0, "postprocess_init" );
 
     LogInfo( "[AI] network ready: in %dx%dx%d, out %u bytes",
              AI_NN_WIDTH, AI_NN_HEIGHT, AI_NN_BPP,
@@ -208,13 +248,13 @@ static void prvAiTask( void * pvParam )
          * Output written by NPU, read by CPU — invalidate before use. */
         xIn[ 0 ] = ( stai_ptr ) ucNnInputBuf[ ucReadyIdx ];
         ret = stai_network_set_inputs( ( stai_network * ) network_ctx, xIn, 1 );
-        configASSERT( ret == STAI_SUCCESS );
+        AI_CHECK( ret == STAI_SUCCESS, "set_inputs" );
 
         SCB_InvalidateDCache_by_Addr( ( uint32_t * ) ucNnOutputBuf,
                                       ( int32_t ) xInfo.outputs[ 0 ].size_bytes );
         xOut[ 0 ] = ( stai_ptr ) ucNnOutputBuf;
         ret = stai_network_set_outputs( ( stai_network * ) network_ctx, xOut, 1 );
-        configASSERT( ret == STAI_SUCCESS );
+        AI_CHECK( ret == STAI_SUCCESS, "set_outputs" );
 
         prvRunInference( ( stai_network * ) network_ctx );
         ulInferences++;

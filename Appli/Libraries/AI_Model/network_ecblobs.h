@@ -993,7 +993,11 @@ static const uint64_t _ec_blob_network_1[3816] =
 
 ECBLOB_RUNTIME_SECTION
 // _ec_blob_network_1 blob, aligned to the cache line size (equal to 64 bytes)
-__attribute__((aligned(64)))
+/* Local edit (not from the generator): 30 KB staging array moved to external
+ * PSRAM (.psram_bss, NOLOAD) to keep AXISRAM free for the app.  Safe: fully
+ * written by ec_copy_blob() before first use.  Do NOT move
+ * _ec_blob_network_1_prev_base_addrs the same way — it has an initializer. */
+__attribute__((aligned(64), section(".psram_bss")))
 static uint64_t _ec_blob_network_1_ptr[3800];
 
 #define _ec_blob_network_1_address _ec_blob_network_1_ptr

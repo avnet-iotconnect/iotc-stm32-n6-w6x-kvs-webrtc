@@ -410,12 +410,19 @@ static void prvPsramHex32( uint32_t v )
     mp_raw_puts( buf );
 }
 
+static uint8_t ucPsramReady = 0U;
+
 static void prvPsramInit( void )
 {
     GPIO_InitTypeDef  xGpio  = { 0 };
     XSPIM_CfgTypeDef  xXspim = { 0 };
     uint32_t          ulClk;
     HAL_StatusTypeDef rc;
+
+    if( ucPsramReady != 0U )
+    {
+        return;
+    }
 
     mp_raw_puts( "[PSRAM] init>\r\n" );
 
@@ -523,6 +530,15 @@ static void prvPsramInit( void )
     }
 
     mp_raw_puts( "[PSRAM] init<\r\n" );
+    ucPsramReady = 1U;
+}
+
+/* Callable from outside the media source: data now lives in .psram_bss
+ * (xAppContext, AI buffers) that is touched before AppMediaSourcePort_Init
+ * runs, so callers must be able to bring PSRAM up first.  Idempotent. */
+void MediaPort_EnsurePsram( void )
+{
+    prvPsramInit();
 }
 
 /* ── Public AppMediaSourcePort_* API ────────────────────────────────────── */
