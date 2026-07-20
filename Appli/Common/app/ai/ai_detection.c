@@ -49,13 +49,13 @@
  * proves itself.  Raise during the rate-tuning pass. */
 #define AI_MIN_INFER_INTERVAL_MS  ( 500U )
 
-/* BISECT (2026-07-20) step 2: PIPE2 runs (DCMIPP writes model-input frames
- * to PSRAM, ISR rotates buffers) but the NPU never runs — frames are
- * dropped on arrival.  PIPE2-off already proved sessions survive; this
- * splits DCMIPP-PIPE2 bus traffic from NPU inference bursts.  Sessions
- * die -> PIPE2/DCMIPP is the killer; survive -> inference is.  Set to 0
- * to restore inference after the A/B. */
-#define AI_BISECT_SKIP_INFERENCE  ( 1 )
+/* BISECT (2026-07-20) history: step 1 (PIPE2 off) -> sessions survive;
+ * step 2 (PIPE2 on, inference skipped) -> video visible but PIPE1 frames
+ * were changing garbage and the session died at ~10 s: the DCMIPP IPPLUG
+ * partition in media_cam.c was starving PIPE1 the moment PIPE2 ran (see
+ * prvDCMIPP_IpPlugInit).  With the repartition in place, inference is
+ * back ON.  Set to 1 only for future A/B debugging. */
+#define AI_BISECT_SKIP_INFERENCE  ( 0 )
 
 #if defined ( __GNUC__ )
     #define ALIGN_32    __attribute__((aligned(32)))
