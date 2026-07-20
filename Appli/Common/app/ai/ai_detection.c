@@ -109,13 +109,27 @@ void AiDetection_PipeInit( int lSensorWidth, int lSensorHeight )
     LogInfo( "[AI] PIPE2 configured %dx%d RGB888", AI_NN_WIDTH, AI_NN_HEIGHT );
 }
 
+/* Called from the media path when the camera actually starts (PIPE1 DBL
+ * start) — NOT from AI init: at boot the sensor is idle and the start
+ * fails.  The old configASSERT here spun at 40-60% CPU on that failure. */
 void AiDetection_PipeStart( void )
 {
     int ret;
 
+    if( ucPipeRunning != 0U )
+    {
+        return;
+    }
+
     ucCaptureIdx = 0U;
     ret = CMW_CAMERA_Start( DCMIPP_PIPE2, ucNnInputBuf[ 0 ], CMW_MODE_CONTINUOUS );
-    configASSERT( ret == HAL_OK );
+
+    if( ret != HAL_OK )
+    {
+        LogError( "[AI] PIPE2 start failed: %d - detection idle", ret );
+        return;
+    }
+
     ucPipeRunning = 1U;
 }
 
@@ -288,7 +302,8 @@ static void prvAiTask( void * pvParam )
              AI_NN_WIDTH, AI_NN_HEIGHT, AI_NN_BPP,
              ( unsigned ) xInfo.outputs[ 0 ].size_bytes );
 
-    AiDetection_PipeStart();
+    /* PIPE2 is started by the media path when the camera starts; until
+     * then this loop just idles on the 1 s semaphore timeout. */
 
     for( ; ; )
     {

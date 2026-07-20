@@ -181,6 +181,15 @@ static void prvMediaTask( void * pvParam )
                           CMW_MODE_CONTINUOUS );
     mp_raw_puts( "[KVSMedia] cam DBL started\r\n" );
 
+    /* PIPE2 (NPU input) rides the same sensor: it can only start once the
+     * camera is actually running — starting it from AI init at boot failed
+     * (sensor idle until a viewer connects) and left the AI task wedged.
+     * No-op unless ENABLE_AI_DETECTION.  Stop is in media_cam.c Stop. */
+    {
+        extern void AiDetection_PipeStart( void );
+        AiDetection_PipeStart();
+    }
+
     /* Hot-path UART traces removed.  At 115200 baud each byte is ~87us,
      * so the ~120 bytes of per-frame [M]F..topA/B/C/wait/enc/cb/iter-end
      * traces were ~10 ms of busy-wait UART TX in the media task per frame
