@@ -168,3 +168,27 @@ has camera→VENC (Pipe1, NV12 640x480) plus the full IOTCONNECT/iotcl path.
   markers bracket the first mapped read.  FOLLOW-UP once octal is
   proven: retry XSPI1/PSRAM at 200 MHz — the HSLV fix likely cures the
   April corruption and doubles media-path headroom.
+
+- 2026-07-20 (night): b118e27 ON-BOARD RESULTS.  HSLV fuses were ALREADY
+  set (OOB demo had burned them) — the missing piece was only the
+  runtime VddIO 1V8 range.  Octal DTR NOR VALIDATED: SFDP trace clean,
+  flash ID c2:81:3b, [XMEM] octal link OK, XSPI2 sclk=200 MHz presc=0,
+  littlefs mounts, mapped reads fine.  NPU fix VALIDATED: [AI] first
+  inference: 37 ms (was ~1750 — 47x), sustained 37-39 ms/inference
+  across sessions, 2 Hz rate floor active, real 17-22 KB IDR F0 frames.
+  BUT sessions still die 1.3-1.8 s after F0 (3/3 attempts): no close
+  reason in device log, then "Fail to send RTP packet ret 22" (a
+  consequence of the close flow, not the cause), PeerClosed, STOPPING
+  MEDIA.  Attempt 1 of 3 also hit "DTLS handshaking timeout".
+  CONCLUSION: the AI/NoC-stall theory is DISPROVEN as the session
+  killer — the old "died at first inference" correlation was temporal
+  coincidence (the 1.75 s stall happened to land at the same ~1.5 s
+  post-F0 mark where this close occurs).  The remaining session drop
+  matches the known intermittent Chrome DTLS/TURN ChannelData issue
+  (see chrome-dtls-channeldata memory: peer ChannelBinds the TURN
+  relay, device drops 0x40-prefixed ChannelData).  NEXT DISCRIMINATORS:
+  (a) viewer on the same LAN (host candidates, no TURN) — if sessions
+  survive, TURN path confirmed; (b) different browser (Firefox vs
+  Chrome); (c) chrome://webrtc-internals on the viewer side for the
+  close reason; (d) re-enable/check the [isl] ChannelData traces (none
+  fired in tonight's log — verify they're still compiled in).
