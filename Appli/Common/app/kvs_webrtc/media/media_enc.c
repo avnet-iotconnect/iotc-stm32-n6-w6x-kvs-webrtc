@@ -317,8 +317,16 @@ void MediaEnc_Init( const MediaEncConf_t * pxConf )
      *
      * 2026-04-16: trimmed to 1.0 Mbps.  At 1.5 Mbps I-frames still hit
      * ~40 KB, exceeding the 500 ms socket-mutex window over UDP TURN.
-     * 1.0 Mbps / 15 fps targets ~8 KB P-frames and ~25 KB I-frames.      */
-    lTargetBitrate = 1000000;
+     * 1.0 Mbps / 15 fps targets ~8 KB P-frames and ~25 KB I-frames.
+     *
+     * 2026-07-20: 500 kbps LINK-CAPACITY A/B.  On a degraded RF evening
+     * the W6X TX path backs up within ~2 s of RTP start at 1 Mbps
+     * (~100 pkt/s) and stays dead >4 s -> the (correct) 3-strike close
+     * fires.  Halving the packet rate tests link capacity vs module bug:
+     * sessions surviving at 500 kbps => adaptive/lower bitrate is the
+     * answer; still dying => W6X module load bug.  Restore 1 Mbps after
+     * the A/B (or once adaptive rate control lands).                     */
+    lTargetBitrate = 500000;
     prvSetupVbr( &xRate, lTargetBitrate, pxConf->lFps, RATE_CTRL_QP_DEFAULT );
     ret = H264EncSetRateCtrl( pxCtx->xHdl, &xRate );
     assert( ret == H264ENC_OK );
