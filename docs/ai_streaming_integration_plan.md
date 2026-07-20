@@ -145,3 +145,26 @@ has camera→VENC (Pipe1, NV12 640x480) plus the full IOTCONNECT/iotcl path.
   session to survive >60 s with inferences ticking and first-inference
   well under ~300 ms.  If it still dies at first inference, next step is
   the 10 s deferred-first-inference experiment to re-check correlation.
+
+- 2026-07-20 (evening): first octal build (8f94aff) BOOT-LOOPED — app got
+  through main(), logged up to "IWDG Enabled", then froze silently until
+  the 32.8 s IWDG reset (no HardFault dump, no ticks: an AXI bus stall on
+  the first memory-mapped DTR read, the signature of a mis-negotiated
+  octal link).  ROOT CAUSE (explains BOTH this and the April "PSRAM at
+  200 MHz corrupts frames" that forced XSPI1 back to 64 MHz): N6 XSPI
+  pads need (a) the HSLV OTP fuse — word 124 bits 15 (VDDIO3/XSPI2-NOR)
+  and 16 (VDDIO2/XSPI1-PSRAM), which every ST N6570-DK example programs
+  on first boot via app_fuseprogramming.c — AND (b) runtime
+  HAL_PWREx_ConfigVddIORange(VDDIOx, 1V8) (the DK BSP does both per
+  port).  Our firmware called only HAL_PWREx_EnableVddIO2/3: pads stayed
+  in 3.3V-range mode — fine at <=64 MHz, broken at 200 MHz.
+  FIXES (this session): FSBL now checks/programs the HSLV fuses
+  (idempotent, prints [FSBL] HSLV...) and sets both VDDIO ranges to 1V8;
+  Appli EXTMEM init is now fail-safe — octal init return code is checked
+  (was ignored), the link is verified with INDIRECT reads (HAL-timeout
+  protected, cannot AXI-stall) before any mapped access, and it falls
+  back to 1-line on failure so the board always boots; ExtMem SFDP debug
+  trace (level 2) prints init steps to raw UART during init only; [LFS]
+  markers bracket the first mapped read.  FOLLOW-UP once octal is
+  proven: retry XSPI1/PSRAM at 200 MHz — the HSLV fix likely cures the
+  April corruption and doubles media-path headroom.

@@ -63,6 +63,30 @@
 static volatile uint8_t  ucNorMapped     = 0U;
 static SemaphoreHandle_t xNorWindowMutex = NULL;
 
+/* Raw LPUART1 markers (mirror of mp_raw_putc — static there).  The first
+ * mapped-window memcpy after a NOR link change is the AXI-stall suspect:
+ * a mis-negotiated DTR mapping freezes the core with no fault and no
+ * further output, so these brackets are the only evidence that survives. */
+static void prvLfsRawPutc( char c )
+{
+    for( uint32_t i = 0; i < 600000UL; i++ )
+    {
+        if( *( volatile uint32_t * ) 0x56000C1CUL & ( 1UL << 7 ) )
+        {
+            *( volatile uint32_t * ) 0x56000C28UL = ( uint32_t ) c;
+            return;
+        }
+    }
+}
+
+static void prvLfsRaw( const char * pcStr )
+{
+    while( *pcStr != '\0' )
+    {
+        prvLfsRawPutc( *pcStr++ );
+    }
+}
+
 /* Held by littlefs prog/erase while the window is down, and by the AI task
  * while the NPU/CPU reads the weights region (see ai_detection.c). */
 void vNorWindowLock( void )
@@ -91,6 +115,8 @@ static void prvNorMapSet( uint8_t ucEnable )
     }
     else
     {
+        prvLfsRaw( ( ucEnable != 0U ) ? "[LFS] map-on FAILED\r\n"
+                                      : "[LFS] map-off FAILED\r\n" );
         LogError( "NOR mapped-mode %s failed",
                   ( ucEnable != 0U ) ? "enable" : "disable" );
     }
@@ -259,9 +285,24 @@ static int lfs_port_read( const struct lfs_config * c,
 
     if( ucNorMapped != 0U )
     {
+        static uint8_t ucFirstMapRead = 1U;
+
         /* Serialize against prog/erase dropping the window mid-read. */
         vNorWindowLock();
+
+        if( ucFirstMapRead != 0U )
+        {
+            prvLfsRaw( "[LFS] mapread>" );
+        }
+
         memcpy( pvBuffer, ( const void * ) ( NOR_MAPPED_BASE + ulReadAddr ), size );
+
+        if( ucFirstMapRead != 0U )
+        {
+            ucFirstMapRead = 0U;
+            prvLfsRaw( "ok\r\n" );
+        }
+
         vNorWindowUnlock();
     }
     else if( EXTMEM_Read( pxCtx->MemId, ulReadAddr, pvBuffer, size ) != EXTMEM_OK )
