@@ -140,6 +140,23 @@ int main(void)
   MX_SPI5_Init();
   MX_TIM5_Init();
   MX_RNG_Init();
+  /* XSPI2 kernel clock = HCLK = 200 MHz (default: HSI 64 MHz) — the NOR
+   * holds the 30 MB AI model weights, streamed through the memory-mapped
+   * window by the NPU on EVERY inference; at 64 MHz the weight fetch
+   * dominates (~1.75 s/inference measured).  Must precede MX_XSPI2_Init
+   * and MX_EXTMEM_MANAGER_Init, which derive prescalers from this clock.
+   * littlefs shares the bus and just gets faster.  (PeriphCommonClock_
+   * Config is deliberately disabled — see comment above — so this is
+   * done inline, mirroring the XSPI1/PSRAM bump in stm32_media_port.c.) */
+  {
+    RCC_PeriphCLKInitTypeDef xXspi2Clk = {0};
+    xXspi2Clk.PeriphClockSelection = RCC_PERIPHCLK_XSPI2;
+    xXspi2Clk.Xspi2ClockSelection  = RCC_XSPI2CLKSOURCE_HCLK;
+    if (HAL_RCCEx_PeriphCLKConfig(&xXspi2Clk) != HAL_OK)
+    {
+      Error_Handler();
+    }
+  }
   MX_XSPI2_Init();
   MX_IWDG_Init();
   MX_USART2_UART_Init();
@@ -192,6 +209,7 @@ void PeriphCommonClock_Config(void)
   {
     Error_Handler();
   }
+
 }
 
 /**
