@@ -312,6 +312,11 @@ static void prvAiTask( void * pvParam )
         ret = stai_network_set_outputs( ( stai_network * ) network_ctx, xOut, 1 );
         AI_CHECK( ret == STAI_SUCCESS, "set_outputs" );
 
+        if( ulInferences == 0U )
+        {
+            prvAiRaw( "[AI] frame0, run>\r\n" );
+        }
+
         /* NPU fetches weights from the mapped NOR window during epochs —
          * exclude concurrent littlefs prog/erase which drops the window. */
         vNorWindowLock();
@@ -340,7 +345,13 @@ static void prvAiTask( void * pvParam )
 
 void AiDetection_Init( void )
 {
+    extern volatile uint32_t g_npu_cache_state;
+
     prvNpuEnable();
+
+    prvAiRaw( "[AI] cache state=" );
+    prvAiRawPutc( ( char ) ( '0' + ( g_npu_cache_state & 0xFU ) ) );
+    prvAiRaw( "\r\n" );
 
     xFrameReady = xSemaphoreCreateBinary();
     configASSERT( xFrameReady != NULL );

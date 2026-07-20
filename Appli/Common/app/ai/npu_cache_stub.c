@@ -29,6 +29,10 @@
 
 static uint8_t ucCacheEnabled = 0U;
 
+/* Bring-up telemetry, printed raw by ai_detection.c:
+ * 1=clocked, 2=post-reset invalidation done, 3=enabled, 0xEE=busy timeout */
+volatile uint32_t g_npu_cache_state = 0U;
+
 static int prvWaitFlagsClear( uint32_t ulMask )
 {
     for( uint32_t i = 0; i < NPU_CACHE_SPIN_LIMIT; i++ )
@@ -65,16 +69,39 @@ void npu_cache_enable( void )
         return;
     }
 
+    /* Power up the NPU-adjacent SRAMs (donor NPURam_enable): RAMCFG
+     * shutdown bits cleared for AXISRAM3-6.  (No RAMCFG instance exists
+     * for CACHEAXIRAM — its RCC MEM clock below is the whole story.) */
+    __HAL_RCC_RAMCFG_CLK_ENABLE();
+    CLEAR_BIT( RAMCFG_SRAM3_AXI->CR, RAMCFG_CR_SRAMSD );
+    CLEAR_BIT( RAMCFG_SRAM4_AXI->CR, RAMCFG_CR_SRAMSD );
+    CLEAR_BIT( RAMCFG_SRAM5_AXI->CR, RAMCFG_CR_SRAMSD );
+    CLEAR_BIT( RAMCFG_SRAM6_AXI->CR, RAMCFG_CR_SRAMSD );
+
     npu_cache_enable_clocks_and_reset();
+
+    /* Settle after reset release before the first register access — a
+     * cold boot bus-faulted on an immediate CACHEAXI->SR read (BFAR at
+     * the SR address) while a warm boot did not. */
+    __DSB();
+
+    for( volatile uint32_t i = 0; i < 1000U; i++ )
+    {
+    }
+
+    g_npu_cache_state = 1U;
 
     /* Post-reset the block runs an automatic full invalidation (BUSYF);
      * EN must not be set until it completes. */
     if( prvWaitFlagsClear( CACHEAXI_SR_BUSYF ) != 0 )
     {
+        g_npu_cache_state = 0xEEU;
         return;
     }
 
+    g_npu_cache_state = 2U;
     SET_BIT( CACHEAXI->CR1, CACHEAXI_CR1_EN );
+    g_npu_cache_state = 3U;
     ucCacheEnabled = 1U;
 }
 
