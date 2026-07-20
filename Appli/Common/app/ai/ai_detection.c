@@ -172,6 +172,18 @@ static void prvRunInference( stai_network * pxNet )
 extern void vNorWindowLock( void );
 extern void vNorWindowUnlock( void );
 
+/* Raw (blocking, never-dropped) UART markers for the init path — the queued
+ * logger drops lines under boot-time burst, which made AI init progress
+ * unobservable.  Same mechanism as the [CAM]/[MP] prints. */
+extern void hook_raw_putc( char c );
+static void prvAiRaw( const char * pcStr )
+{
+    while( *pcStr != '\0' )
+    {
+        hook_raw_putc( *pcStr++ );
+    }
+}
+
 /* On failure: log and park the task (NOT configASSERT — its while(1) spin
  * burned 30-60% CPU alongside streaming when init hung).  Streaming must
  * survive any AI init failure.  The unlock is a harmless no-op when the
@@ -180,6 +192,9 @@ extern void vNorWindowUnlock( void );
     do {                                                             \
         if( !( cond ) ) {                                            \
             LogError( "[AI] init failed at %s (ret=%d) - AI disabled", tag, ret ); \
+            prvAiRaw( "[AI] PARKED: " );                             \
+            prvAiRaw( tag );                                         \
+            prvAiRaw( "\r\n" );                                      \
             vNorWindowUnlock();                                      \
             for( ; ; ) { vTaskSuspend( NULL ); }                     \
         }                                                            \
@@ -202,9 +217,13 @@ static void prvAiTask( void * pvParam )
      * The littlefs OSPI driver runs XSPI2 in INDIRECT command mode, which
      * may have torn the mapping down — probe before touching stai, because
      * init against an unmapped/garbage window hangs with no diagnostic. */
+    prvAiRaw( "[AI] task>\r\n" );
+
     /* Hold the NOR window lock across probe + network init: the CPU reads
      * the ec blobs from flash here and the window must stay mapped. */
     vNorWindowLock();
+
+    prvAiRaw( "[AI] lock ok\r\n" );
 
     LogInfo( "[AI] XSPI1 CR=%08lx XSPI2 CR=%08lx", XSPI1->CR, XSPI2->CR );
 
@@ -213,9 +232,12 @@ static void prvAiTask( void * pvParam )
         LogError( "[AI] XSPI2 not memory-mapped (FMODE=%lu) - weights at "
                   "0x70380000 unreachable; AI disabled",
                   ( XSPI2->CR & XSPI_CR_FMODE_Msk ) >> XSPI_CR_FMODE_Pos );
+        prvAiRaw( "[AI] PARKED: fmode\r\n" );
         vNorWindowUnlock();
         for( ; ; ) { vTaskSuspend( NULL ); }
     }
+
+    prvAiRaw( "[AI] probe>\r\n" );
 
     {
         volatile const uint32_t * pulW = ( volatile const uint32_t * ) 0x70380000UL;
@@ -223,17 +245,21 @@ static void prvAiTask( void * pvParam )
                  pulW[ 0 ], pulW[ 1 ], pulW[ 2 ], pulW[ 3 ] );
     }
 
-    LogInfo( "[AI] stai_runtime_init..." );
+    prvAiRaw( "[AI] rt_init>\r\n" );
     ret = stai_runtime_init();
+    prvAiRaw( "[AI] rt_init<\r\n" );
     LogInfo( "[AI] stai_runtime_init ret=%d", ret );
     AI_CHECK( ret == STAI_SUCCESS, "runtime_init" );
 
-    LogInfo( "[AI] stai_network_init..." );
+    prvAiRaw( "[AI] net_init>\r\n" );
     ret = stai_network_init( ( stai_network * ) network_ctx );
+    prvAiRaw( "[AI] net_init<\r\n" );
     LogInfo( "[AI] stai_network_init ret=%d", ret );
     AI_CHECK( ret == STAI_SUCCESS, "network_init" );
 
+    prvAiRaw( "[AI] get_info>\r\n" );
     ret = stai_network_get_info( ( stai_network * ) network_ctx, &xInfo );
+    prvAiRaw( "[AI] get_info<\r\n" );
     AI_CHECK( ret == STAI_SUCCESS, "get_info" );
     AI_CHECK( xInfo.n_inputs == 1, "n_inputs" );
     AI_CHECK( xInfo.outputs[ 0 ].size_bytes <= AI_OUT_BUFFER_MAX_BYTES, "out_size" );
@@ -242,6 +268,8 @@ static void prvAiTask( void * pvParam )
     AI_CHECK( ret == 0, "postprocess_init" );
 
     vNorWindowUnlock();
+
+    prvAiRaw( "[AI] ready\r\n" );
 
     LogInfo( "[AI] network ready: in %dx%dx%d, out %u bytes",
              AI_NN_WIDTH, AI_NN_HEIGHT, AI_NN_BPP,
@@ -277,6 +305,11 @@ static void prvAiTask( void * pvParam )
         prvRunInference( ( stai_network * ) network_ctx );
         vNorWindowUnlock();
         ulInferences++;
+
+        if( ulInferences == 1U )
+        {
+            prvAiRaw( "[AI] first inference done\r\n" );
+        }
 
         ret = app_postprocess_run( ( void * [] ) { ucNnOutputBuf }, 1,
                                    &xPpOut, &xPpParams );
