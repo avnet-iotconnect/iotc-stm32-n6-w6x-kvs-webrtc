@@ -151,6 +151,11 @@ struct spi_xfer_engine
 /** SPI transfer engine instance */
 static struct spi_xfer_engine xfer_engine = {0};
 
+/* Tick of the current module rx_stall episode start (|1 so never 0; 0 = no
+ * stall active).  Single engine instance, engine-task-only access.
+ * (2026-07-20 stall observability + escape.) */
+static TickType_t spi_stall_since = 0U;
+
 /** SPI buffer alignment mask */
 #define SPI_BUF_ALIGN_MASK              (0x0003U)
 
@@ -596,12 +601,37 @@ static int32_t spi_xfer_one(struct spi_xfer_engine *engine, struct spi_buffer *t
 
   spi_trace(SPI_TP_NONE, "wait_txn_rdy %" PRIi32 "\n", wait_txn_rdy);
   engine->state = SPI_XFER_STATE_FIRST_PART;
-  if ((wait_txn_rdy != 0) &&
-      (spi_wait_event(engine, SPI_EVT_TXN_RDY, SPI_WAIT_TXN_TIMEOUT_MS) == 0))
+  if (wait_txn_rdy != 0)
   {
-    SPI_STAT_INC(&engine->stat, wait_txn_timeouts, 1U);
-    spi_err("waiting for spi txn ready timeouted\n");
-    return -1;
+    /* LOST-EDGE HARDENING (2026-07-20): TXN_RDY is an edge-only event; a
+     * consumed/missed rising edge used to cost the full 2000 ms timeout
+     * per lap with the head txbuf retained (multi-second TX stalls
+     * quantized in 2 s).  Wait in short laps and accept the PIN LEVEL as
+     * ready — if the line is high the module is ready regardless of
+     * whether we caught the edge. */
+    int32_t got = 0;
+    uint32_t lap;
+    for (lap = 0U; lap < (SPI_WAIT_TXN_TIMEOUT_MS / 100U); lap++)
+    {
+      if (spi_wait_event(engine, SPI_EVT_TXN_RDY, 100U) != 0)
+      {
+        got = 1;
+        break;
+      }
+      if (spi_port_is_ready() != 0)
+      {
+        /* Edge missed but line is high: proceed. */
+        spi_err("txn rdy edge missed, pin high - proceeding (lap %" PRIu32 ")\n", lap);
+        got = 1;
+        break;
+      }
+    }
+    if (got == 0)
+    {
+      SPI_STAT_INC(&engine->stat, wait_txn_timeouts, 1U);
+      spi_err("waiting for spi txn ready timeouted\n");
+      return -1;
+    }
   }
 
   /* Re-initialize events in case of pending ones. */
@@ -675,11 +705,19 @@ static int32_t spi_xfer_one(struct spi_xfer_engine *engine, struct spi_buffer *t
     {
       SPI_STAT_INC(&engine->stat, rx_stall, 1U);
       spi_trace(SPI_TP_NONE, "Slave RX stalled\n");
+      /* Stall observability (2026-07-20): the module withholding TX
+       * credit is root-cause #1 for the whole-stack media stalls —
+       * timestamp every episode. */
+      spi_stall_since = xTaskGetTickCount() | 1U;   /* never 0 */
+      spi_err("rx_stall BEGIN t=%" PRIu32 "\n", (uint32_t)spi_stall_since);
     }
   }
   else if (psh->rx_stall == 0U)
   {
     rx_restore = 1;
+    spi_err("rx_stall END dur=%" PRIu32 "ms\n",
+            (uint32_t)(xTaskGetTickCount() - (spi_stall_since & ~1U)));
+    spi_stall_since = 0U;
   }
   else
   {
@@ -712,6 +750,28 @@ static int32_t spi_xfer_one(struct spi_xfer_engine *engine, struct spi_buffer *t
     {
       engine->txbuf = NULL;
       spi_buffer_free(txbuf);
+    }
+    else
+    {
+      /* STALL ESCAPE (2026-07-20): while the module asserts rx_stall the
+       * head txbuf is retained and ALL traffic types behind it in the
+       * single shared txq are frozen (media, MQTT, WSS, AT).  NETWORK
+       * frames are droppable — after 1 s of continuous stall, drop the
+       * retained head so the queue can make progress the moment the
+       * module recovers; never drop AT frames (command/response pairing).
+       */
+      uint8_t stall_type = spi_buffer_get_traffic_type(txbuf);
+
+      if (((stall_type == SPI_MSG_CTRL_TRAFFIC_NETWORK_STA) ||
+           (stall_type == SPI_MSG_CTRL_TRAFFIC_NETWORK_AP)) &&
+          (spi_stall_since != 0U) &&
+          ((xTaskGetTickCount() - (spi_stall_since & ~1U)) > pdMS_TO_TICKS(1000U)))
+      {
+        engine->txbuf = NULL;
+        spi_buffer_free(txbuf);
+        SPI_STAT_INC(&engine->stat, rx_drop, 1U);
+        spi_err("rx_stall >1s: dropped head net frame\n");
+      }
     }
   }
 
@@ -754,10 +814,16 @@ static int32_t spi_xfer_one(struct spi_xfer_engine *engine, struct spi_buffer *t
         }
       }
 
-      ret = xQueueSend(engine->rxq[msg_type], &rxbuf, portMAX_DELAY);
+      /* WEDGE FIX (2026-07-20): was portMAX_DELAY — if a consumer (netif
+       * task / AT parser) stopped draining its rxq, the single engine
+       * task blocked FOREVER with CS asserted, killing BOTH directions
+       * for every traffic type.  Bounded wait makes the drop branch
+       * below live; dropping one RX packet is strictly better than
+       * wedging the sole bus servicer. */
+      ret = xQueueSend(engine->rxq[msg_type], &rxbuf, pdMS_TO_TICKS(50U));
       if (ret != pdTRUE)
       {
-        spi_trace(SPI_TP_NONE, "failed to send to type %d rxq, msg discarded\r\n", msg_type);
+        spi_err("type %d rxq full, msg discarded\n", msg_type);
         spi_buffer_free(rxbuf);
         SPI_STAT_INC(&engine->stat, rx_drop, 1U);
       }
@@ -786,16 +852,28 @@ static int32_t spi_xfer_one(struct spi_xfer_engine *engine, struct spi_buffer *t
     /* No rx bytes to read */
   }
 
-  /* Wait until slave acknowledged header. */
+  /* Wait until slave acknowledged header.  BOUNDED (2026-07-20): the loop
+   * used to spin indefinitely (100 ms laps) if the falling edge was missed
+   * while the pin stayed high — cap at 5 laps and abort the transaction so
+   * the engine always exits in finite time. */
   spi_trace(SPI_TP_WAIT_HDR_ACK_START, "waiting for header ack\n");
-  while (spi_wait_event(engine, SPI_EVT_HDR_ACKED, SPI_WAIT_HDR_ACK_TIMEOUT_MS) == 0)
   {
-    if (spi_port_is_ready() == 0)
+    uint32_t ack_laps = 0U;
+    while (spi_wait_event(engine, SPI_EVT_HDR_ACKED, SPI_WAIT_HDR_ACK_TIMEOUT_MS) == 0)
     {
-      break;
-    }
+      if (spi_port_is_ready() == 0)
+      {
+        break;
+      }
 
-    SPI_STAT_INC(&engine->stat, wait_hdr_ack_timeouts, 1U);
+      SPI_STAT_INC(&engine->stat, wait_hdr_ack_timeouts, 1U);
+
+      if (++ack_laps >= 5U)
+      {
+        spi_err("hdr ack timeout after %" PRIu32 " laps, aborting txn\n", ack_laps);
+        break;
+      }
+    }
   }
   spi_trace(SPI_TP_WAIT_HDR_ACK_END, "Got header ack\n");
 

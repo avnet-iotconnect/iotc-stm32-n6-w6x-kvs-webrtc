@@ -53,6 +53,13 @@ extern "C" {
 
 /* USER CODE BEGIN EC */
 
+/* STA network RX queue depth (default 16 in w6x_default_config.h).  At
+ * 50-100 inbound pkt/s (RTCP/STUN/NACK during streaming) a 16-deep queue
+ * overflows during any >160 ms delivery stall; the SPI engine then blocks
+ * on its infinite-wait enqueue and wedges the whole bus.  32 rides out
+ * ~0.5 s. (2026-07-20 W6X TX-stall deep dive) */
+#define W6X_NETIF_STA_RXQ_DEPTH                 32
+
 /* USER CODE END EC */
 
 #ifdef __cplusplus

@@ -87,7 +87,13 @@ static void icn_raw_dec( int v )
  * lwipopts.h) EAGAIN is rare, and when it does hit, a 50 ms sleep per
  * retry dominated frame time on the TURN-TLS path. */
 #define ICE_CONTROLLER_RESEND_DELAY_MS ( 5 )
-#define ICE_CONTROLLER_RESEND_TIMEOUT_MS ( 1000 )
+/* 1000 -> 200 (2026-07-20): the retry loop runs while HOLDING the ICE
+ * socketMutex, and each lap re-enters lwIP (which takes the global core
+ * lock for up to the W6X enqueue timeout).  A 1 s budget meant one
+ * congested send could hold the mutex ~1.2 s, starving STUN responses on
+ * the RX task.  200 ms keeps the mutex hold bounded; the 3-strike gate
+ * absorbs the resulting per-packet failures. */
+#define ICE_CONTROLLER_RESEND_TIMEOUT_MS ( 200 )
 
 /* Consecutive SendSocketPacket failures on the NOMINATED socket before the
  * session is declared dead.  Each failure already represents up to
@@ -523,7 +529,8 @@ static IceControllerResult_t SendSocketPacket( IceControllerSocketContext_t * pS
                     break;
                 }
             }
-            else if( ( errno == ENOMEM ) || ( errno == ENOSPC ) || ( errno == ENOBUFS ) )
+            else if( ( errno == ENOMEM ) || ( errno == ENOSPC ) || ( errno == ENOBUFS ) ||
+                     ( errno == EINPROGRESS ) )   /* W6X txq-full maps to ERR_INPROGRESS — transient, retry */
             {
                 vTaskDelay( pdMS_TO_TICKS( ICE_CONTROLLER_RESEND_DELAY_MS ) );
                 totalDelayMs += ICE_CONTROLLER_RESEND_DELAY_MS;

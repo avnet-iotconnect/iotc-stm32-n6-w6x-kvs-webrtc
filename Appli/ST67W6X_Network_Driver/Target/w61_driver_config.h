@@ -29,6 +29,15 @@ extern "C" {
 /* Includes ------------------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+/* SPI transport TX queue depth (spi_iface.c default 8, #ifndef-guarded and
+ * this header IS on its include chain via w61_default_config.h).  ALL
+ * traffic types (AT, network STA/AP) share this single queue; 8 slots
+ * absorb <160 ms of RTP at 50-100 pkt/s, so any transient module
+ * flow-control stall (rx_stall) instantly backed the whole stack up.
+ * 32 slots ride out ~0.6 s bursts; worst-case transient heap cost is
+ * 32 x ~1.5 KB payload copies. (2026-07-20 W6X TX-stall deep dive) */
+#define SPI_TXQ_LEN    32U
+
 /* USER CODE END Includes */
 
 /* Exported constants --------------------------------------------------------*/

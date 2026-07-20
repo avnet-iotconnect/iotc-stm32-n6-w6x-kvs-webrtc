@@ -178,6 +178,11 @@ err_t net_if_output(struct netif *net_if, struct pbuf *p_buf)
     ret = W6X_Netif_output(link_id, q->payload, q->len);
     if (ret < 0)
     {
+      /* This loop runs on the caller task UNDER THE LWIP CORE LOCK.
+       * On the first failed segment, stop: the rest of the frame is a
+       * torn packet on the wire, and each further attempt burns another
+       * full enqueue timeout while every other socket convoys behind
+       * the lock. (2026-07-20 W6X TX-stall deep dive) */
       LogError("%s: spi_write ERROR : %d\n", __func__, ret);
       switch (ret)
       {
@@ -200,6 +205,8 @@ err_t net_if_output(struct netif *net_if, struct pbuf *p_buf)
           status = ERR_VAL;
           break;
       }
+
+      break;   /* abandon the rest of the frame — see comment above */
     }
   }
 
@@ -294,7 +301,10 @@ static int32_t netif_rx_process(uint32_t link_id)
   if (pb == NULL)
   {
     LogError("Memory allocation failure\n");
+    /* Free BOTH the driver buffer and the wrapper (was leaking the
+     * netif_pbuf_t container). */
     (void)W6X_Netif_free(buffer);
+    vPortFree(CONTAINER_OF(pbufc, netif_pbuf_t, pb));
     vTaskDelay(pdMS_TO_TICKS(100));
     return -1;
   }
@@ -302,8 +312,23 @@ static int32_t netif_rx_process(uint32_t link_id)
   /* Call the upper layer callback */
   if (netif_cur->input(pb, netif_cur))
   {
-    LogError("Input ERROR\n");
-    (void)W6X_Netif_free(buffer);
+    /* HEAP-CORRUPTION FIX (2026-07-20): this path used to call BOTH
+     * W6X_Netif_free(buffer) AND netif_pbuf_free(pb) — but
+     * netif_pbuf_free() already frees netif_pbuf->buffer, i.e. the SAME
+     * pointer, so every inbound overflow during a TX stall double-freed
+     * a heap block.  Random later crashes / wedges (the 11 s – 231 s
+     * session-lifetime lottery) were the downstream damage.  Probe: count
+     * and report with heap level, rate-limited. */
+    {
+      static uint32_t ulInputErrs = 0U;
+      ulInputErrs++;
+      if( ( ulInputErrs & 0x07U ) == 1U )
+      {
+        LogError( "[IE] input drop n=%lu heap=%u",
+                  ( unsigned long ) ulInputErrs,
+                  ( unsigned ) xPortGetFreeHeapSize() );
+      }
+    }
     netif_pbuf_free(pb);
     return -1;
   }
