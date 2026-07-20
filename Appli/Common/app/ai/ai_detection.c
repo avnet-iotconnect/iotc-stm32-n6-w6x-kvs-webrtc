@@ -126,6 +126,13 @@ void AiDetection_PipeStart( void )
 
     if( ret != HAL_OK )
     {
+        /* PipeStop uses Suspend, so on the second and later camera starts
+         * the pipe is resumed, not started (Start returns -4/busy then). */
+        ret = CMW_CAMERA_Resume( DCMIPP_PIPE2 );
+    }
+
+    if( ret != HAL_OK )
+    {
         LogError( "[AI] PIPE2 start failed: %d - detection idle", ret );
         return;
     }
