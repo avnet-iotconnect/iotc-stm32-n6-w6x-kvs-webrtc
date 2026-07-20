@@ -83,14 +83,17 @@ static void mp_raw_hex32( uint32_t v )
  * typically repeated patterns or all 0xff / 0x00.                          */
 static void mp_probe_frame_row( const uint8_t * pY )
 {
-    /* 1280 Y-bytes per row; sample row 360 (middle of 720p Y-plane).       */
-    const uint32_t ulRowBytes = 1280U;
-    const uint32_t ulRowY     = 360U;
+    /* 640 Y-bytes per row at 640x480; sample row 240 (frame middle).
+     * (Historic bug: this probe kept the 720p-era 1280-byte stride and
+     * row 360, so it read PAST the 307200-byte Y plane into uninit
+     * PSRAM — the eternal constant 0xAA was never frame data.)          */
+    const uint32_t ulRowBytes = 640U;
+    const uint32_t ulRowY     = 240U;
     const uint32_t ulRowBase  = ulRowY * ulRowBytes;
-    const uint32_t ulCols[ 5 ] = { 0U, 320U, 640U, 960U, 1270U };
+    const uint32_t ulCols[ 5 ] = { 0U, 160U, 320U, 480U, 636U };
     int lI;
 
-    mp_raw_puts( "[M]Y360:" );
+    mp_raw_puts( "[M]Y240:" );
     for( lI = 0; lI < 5; lI++ )
     {
         uint8_t ucY = pY[ ulRowBase + ulCols[ lI ] ];
