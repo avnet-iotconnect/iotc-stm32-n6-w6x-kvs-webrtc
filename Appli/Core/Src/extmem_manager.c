@@ -67,7 +67,14 @@ void MX_EXTMEM_MANAGER_Init(void)
   /* EXTMEMORY_1 */
   extmem_list_config[0].MemType = EXTMEM_NOR_SFDP;
   extmem_list_config[0].Handle = (void*)&hxspi2;
-  extmem_list_config[0].ConfigType = EXTMEM_LINK_CONFIG_1LINE;
+  /* 8LINES puts the MX66UW1G45G in octal DTR (8D-8D-8D) at the SFDP-declared
+   * 200 MHz with DQS — ~400 MB/s through the memory-mapped window.  1LINE
+   * left the NPU streaming the 30 MB model weights over single-wire SPI at
+   * the SFDP driver's 50 MHz floor (~6 MB/s): every first inference stalled
+   * the NoC for seconds and killed live WebRTC viewer sessions.  All 8 IO
+   * pads + DQS are wired and configured in HAL_XSPI_MspInit; littlefs goes
+   * through EXTMEM_* / the mapped window and is link-agnostic. */
+  extmem_list_config[0].ConfigType = EXTMEM_LINK_CONFIG_8LINES;
 
   EXTMEM_Init(EXTMEMORY_1, HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_XSPI2));
 

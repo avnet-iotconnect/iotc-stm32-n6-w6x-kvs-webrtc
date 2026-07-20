@@ -122,3 +122,26 @@ has camera→VENC (Pipe1, NV12 640x480) plus the full IOTCONNECT/iotcl path.
   inference (e.g. one per N seconds) until fetch time drops.  Wi-Fi and
   power were ruled out by the user; NACK/rolling-buffer fix (capacity
   81) is validated separately.
+
+- 2026-07-20 (later): SESSION-DROP FIX IMPLEMENTED, pending board test.
+  Why the 7fad82d XSPI2 kernel bump changed nothing: the kernel clock was
+  ALREADY HCLK/200MHz (HAL_XSPI_MspInit sets it); the NOR was slow because
+  (a) extmem_manager.c configured EXTMEM_LINK_CONFIG_1LINE — single-wire
+  SPI — and (b) the SFDP driver parks SCLK at its 50 MHz default and,
+  with sfdp_public.MaxFreq==0 (config is memset), never raises it for
+  non-octal links.  Effective weight path: ~50MHz/1-line ≈ 6 MB/s.
+  FIXES: Appli extmem_manager.c -> EXTMEM_LINK_CONFIG_8LINES: the MW
+  switches the MX66UW1G45G to octal DTR (8D-8D-8D) and sets SCLK from the
+  SFDP xSPI-profile tables -> 200 MHz DTR w/ DQS (~400 MB/s raw; all 8 IOs
+  + DQS already in MspInit; littlefs is EXTMEM/mapped-window agnostic;
+  FSBL EXTMEM left at 1LINE deliberately — boot-critical, one 1.5 MB copy).
+  FSBL IC6 div 4->2 (NPU 400->800 MHz), IC11 8->4 (NPU RAMs 200->400 MHz);
+  VOS0+SMPS-overdrive already set.  DIAGNOSTICS added in ai_detection.c:
+  "[AI] XSPI2 kernel/presc/sclk" log at task start (verify presc=0 @
+  200 MHz), "[AI] first inference: N ms" (pass/fail evidence vs the old
+  ~1750 ms), heartbeat gains last=Nms.  Also added AI_MIN_INFER_INTERVAL_MS
+  500 rate floor as insurance until the rate-tuning pass.
+  TEST: flash both FSBL+Appli (bin/flash.ps1), open a viewer, expect
+  session to survive >60 s with inferences ticking and first-inference
+  well under ~300 ms.  If it still dies at first inference, next step is
+  the 10 s deferred-first-inference experiment to re-check correlation.

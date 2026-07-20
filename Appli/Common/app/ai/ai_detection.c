@@ -43,6 +43,12 @@
 
 #define AI_OUT_BUFFER_MAX_BYTES   ( 64U * 1024U )
 
+/* Floor between inference starts.  Every inference streams the weights over
+ * XSPI2 and competes with DCMIPP/VENC/Wi-Fi for the NoC; 2 Hz is plenty for
+ * telemetry and keeps the media path safe while the octal-DTR NOR config
+ * proves itself.  Raise during the rate-tuning pass. */
+#define AI_MIN_INFER_INTERVAL_MS  ( 500U )
+
 #if defined ( __GNUC__ )
     #define ALIGN_32    __attribute__((aligned(32)))
     #define IN_PSRAM    __attribute__((section(".psram_bss")))
@@ -241,7 +247,9 @@ static void prvAiTask( void * pvParam )
     static od_yolov2_pp_static_param_t xPpParams;     /* postprocess config  */
     int ret;
     uint32_t ulInferences = 0U;
+    uint32_t ulLastRunMs = 0U;
     TickType_t xLastLog = 0;
+    TickType_t xLastInferStart = 0;
 
     ( void ) pvParam;
 
@@ -260,6 +268,16 @@ static void prvAiTask( void * pvParam )
     prvAiRaw( "[AI] lock ok\r\n" );
 
     LogInfo( "[AI] XSPI1 CR=%08lx XSPI2 CR=%08lx", XSPI1->CR, XSPI2->CR );
+
+    /* Weight-fetch bandwidth check: SCLK = kernel / (prescaler+1).  Wants
+     * kernel=200 MHz (HCLK) and prescaler=0; the SFDP driver parked SCLK at
+     * 50 MHz single-wire before the 8LINES/octal-DTR switch. */
+    {
+        uint32_t ulKernelHz = HAL_RCCEx_GetPeriphCLKFreq( RCC_PERIPHCLK_XSPI2 );
+        uint32_t ulPresc = ( XSPI2->DCR2 & XSPI_DCR2_PRESCALER_Msk ) >> XSPI_DCR2_PRESCALER_Pos;
+        LogInfo( "[AI] XSPI2 kernel=%lu Hz presc=%lu sclk=%lu Hz",
+                 ulKernelHz, ulPresc, ulKernelHz / ( ulPresc + 1U ) );
+    }
 
     if( ( XSPI2->CR & XSPI_CR_FMODE_Msk ) != XSPI_CR_FMODE_Msk )
     {
@@ -322,6 +340,13 @@ static void prvAiTask( void * pvParam )
             continue;
         }
 
+        /* Rate floor: drop frames that arrive too soon after the last run. */
+        if( ( ulInferences != 0U ) &&
+            ( ( xTaskGetTickCount() - xLastInferStart ) < pdMS_TO_TICKS( AI_MIN_INFER_INTERVAL_MS ) ) )
+        {
+            continue;
+        }
+
         /* Input written by DCMIPP, read by NPU — no CPU cache interaction.
          * Output written by NPU, read by CPU — invalidate before use. */
         xIn[ 0 ] = ( stai_ptr ) ucNnInputBuf[ ucReadyIdx ];
@@ -341,14 +366,20 @@ static void prvAiTask( void * pvParam )
 
         /* NPU fetches weights from the mapped NOR window during epochs —
          * exclude concurrent littlefs prog/erase which drops the window. */
+        xLastInferStart = xTaskGetTickCount();
         vNorWindowLock();
         prvRunInference( ( stai_network * ) network_ctx );
         vNorWindowUnlock();
+        ulLastRunMs = ( uint32_t ) ( ( xTaskGetTickCount() - xLastInferStart )
+                                     * portTICK_PERIOD_MS );
         ulInferences++;
 
         if( ulInferences == 1U )
         {
             prvAiRaw( "[AI] first inference done\r\n" );
+            /* The session-drop signature was the first weight fetch stalling
+             * the NoC for ~1.75 s; this number is the pass/fail evidence. */
+            LogInfo( "[AI] first inference: %lu ms", ulLastRunMs );
         }
 
         ret = app_postprocess_run( ( void * [] ) { ucNnOutputBuf }, 1,
@@ -358,9 +389,9 @@ static void prvAiTask( void * pvParam )
         if( ( xTaskGetTickCount() - xLastLog ) > pdMS_TO_TICKS( 2000 ) )
         {
             xLastLog = xTaskGetTickCount();
-            LogInfo( "[AI] inferences=%u dets=%d pp_ret=%d",
+            LogInfo( "[AI] inferences=%u dets=%d pp_ret=%d last=%lums",
                      ( unsigned ) ulInferences,
-                     ( int ) xPpOut.nb_detect, ret );
+                     ( int ) xPpOut.nb_detect, ret, ulLastRunMs );
         }
     }
 }

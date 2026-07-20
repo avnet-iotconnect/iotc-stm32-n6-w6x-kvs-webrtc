@@ -303,10 +303,15 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.IC1Selection.ClockDivider = 2;
   RCC_ClkInitStruct.IC2Selection.ClockSelection = RCC_ICCLKSOURCE_PLL1;
   RCC_ClkInitStruct.IC2Selection.ClockDivider = 4;
+  /* NPU (IC6) 1600/2 = 800 MHz, NPU RAMs (IC11) 1600/4 = 400 MHz — was
+   * 400/200.  The donor (x-cube-n6-ai-h264-usb-uvc) runs 1000/900 off
+   * dedicated PLL2/PLL3; 800/400 off the shared PLL1 halves inference
+   * compute time without adding a PLL.  VOS scale 0 + SMPS overdrive are
+   * already set above, which is what these speeds require. */
   RCC_ClkInitStruct.IC6Selection.ClockSelection = RCC_ICCLKSOURCE_PLL1;
-  RCC_ClkInitStruct.IC6Selection.ClockDivider = 4;
+  RCC_ClkInitStruct.IC6Selection.ClockDivider = 2;
   RCC_ClkInitStruct.IC11Selection.ClockSelection = RCC_ICCLKSOURCE_PLL1;
-  RCC_ClkInitStruct.IC11Selection.ClockDivider = 8;
+  RCC_ClkInitStruct.IC11Selection.ClockDivider = 4;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct) != HAL_OK)
   {
