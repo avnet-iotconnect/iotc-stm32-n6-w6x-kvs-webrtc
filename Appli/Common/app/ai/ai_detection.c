@@ -174,13 +174,26 @@ extern void vNorWindowUnlock( void );
 
 /* Raw (blocking, never-dropped) UART markers for the init path — the queued
  * logger drops lines under boot-time burst, which made AI init progress
- * unobservable.  Same mechanism as the [CAM]/[MP] prints. */
-extern void hook_raw_putc( char c );
+ * unobservable.  Same bounded-spin register write as the [CAM]/[MP] prints
+ * (mp_raw_putc in stm32_media_port.c — static there, so mirrored). */
+extern void vPetWatchdog( void );
+static void prvAiRawPutc( char c )
+{
+    for( uint32_t i = 0; i < 600000UL; i++ )
+    {
+        if( *( volatile uint32_t * ) 0x56000C1CUL & ( 1UL << 7 ) )
+        {
+            *( volatile uint32_t * ) 0x56000C28UL = ( uint32_t ) c;
+            return;
+        }
+    }
+    vPetWatchdog();
+}
 static void prvAiRaw( const char * pcStr )
 {
     while( *pcStr != '\0' )
     {
-        hook_raw_putc( *pcStr++ );
+        prvAiRawPutc( *pcStr++ );
     }
 }
 
