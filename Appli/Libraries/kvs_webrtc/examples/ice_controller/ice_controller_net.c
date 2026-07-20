@@ -97,6 +97,12 @@ static void icn_raw_dec( int v )
  * drops one RTP packet and lets NACK/retransmit recover it. */
 #define ICE_CONTROLLER_SEND_FAILURE_CLOSE_THRESHOLD ( 3 )
 
+/* Congestion signal for adaptive bitrate (media_enc.c): monotonic count of
+ * nominated-socket send troubles (failed sends AND socket-mutex timeouts
+ * behind a wedged send).  The encoder samples it once a second and drops
+ * to the low bitrate tier whenever it advances. */
+volatile uint32_t g_iceNominatedSendFailures = 0U;
+
 static void GetLocalIPAdresses( IceEndpoint_t * pLocalIceEndpoints,
                                 size_t * pLocalIceEndpointsNum )
 {
@@ -1242,6 +1248,7 @@ IceControllerResult_t IceControllerNet_SendPacket( IceControllerContext_t * pCtx
         {
             icn_raw_puts( "[icn] sockMtx<TIMEOUT\r\n" );
             LogError( ( "socketMutex timeout (1500 ms) — prior send wedged" ) );
+            g_iceNominatedSendFailures++;   /* congestion signal for adaptive bitrate */
             ret = ICE_CONTROLLER_RESULT_FAIL_MUTEX_TAKE;
         }
     }
@@ -1328,6 +1335,7 @@ IceControllerResult_t IceControllerNet_SendPacket( IceControllerContext_t * pCtx
              * Session-fatal close killed a healthy 231 s AI+streaming
              * session (2026-07-20); now it takes several in a row. */
             pSocketContext->consecutiveSendFailures++;
+            g_iceNominatedSendFailures++;
 
             if( pSocketContext->consecutiveSendFailures < ICE_CONTROLLER_SEND_FAILURE_CLOSE_THRESHOLD )
             {
