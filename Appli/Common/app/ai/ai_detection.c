@@ -49,6 +49,14 @@
  * proves itself.  Raise during the rate-tuning pass. */
 #define AI_MIN_INFER_INTERVAL_MS  ( 500U )
 
+/* BISECT (2026-07-20) step 2: PIPE2 runs (DCMIPP writes model-input frames
+ * to PSRAM, ISR rotates buffers) but the NPU never runs — frames are
+ * dropped on arrival.  PIPE2-off already proved sessions survive; this
+ * splits DCMIPP-PIPE2 bus traffic from NPU inference bursts.  Sessions
+ * die -> PIPE2/DCMIPP is the killer; survive -> inference is.  Set to 0
+ * to restore inference after the A/B. */
+#define AI_BISECT_SKIP_INFERENCE  ( 1 )
+
 #if defined ( __GNUC__ )
     #define ALIGN_32    __attribute__((aligned(32)))
     #define IN_PSRAM    __attribute__((section(".psram_bss")))
@@ -346,6 +354,22 @@ static void prvAiTask( void * pvParam )
         {
             continue;
         }
+
+#if ( AI_BISECT_SKIP_INFERENCE == 1 )
+        /* PIPE2 frames arrive and rotate; NPU stays idle.  Heartbeat shows
+         * the pipe is alive so the A/B evidence is in the log. */
+        ulInferences++;
+
+        if( ( xTaskGetTickCount() - xLastLog ) > pdMS_TO_TICKS( 2000 ) )
+        {
+            xLastLog = xTaskGetTickCount();
+            LogInfo( "[AI] BISECT pipe2-only: frames=%u (inference skipped)",
+                     ( unsigned ) ulInferences );
+        }
+
+        xLastInferStart = xTaskGetTickCount();
+        continue;
+#endif /* AI_BISECT_SKIP_INFERENCE */
 
         /* Input written by DCMIPP, read by NPU — no CPU cache interaction.
          * Output written by NPU, read by CPU — invalidate before use. */

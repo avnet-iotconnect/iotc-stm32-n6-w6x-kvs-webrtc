@@ -188,20 +188,12 @@ static void prvMediaTask( void * pvParam )
     {
         extern void AiDetection_PipeStart( void );
 
-        /* BISECT (2026-07-20, temporary): viewer sessions die ~1.5 s after
-         * F0 whenever PIPE2/inference runs — on BOTH the slow (1.75 s) and
-         * fast (37 ms) weight-fetch builds — while AI-off sessions live.
-         * Inference *duration* is exonerated; PIPE2 activity itself is the
-         * suspect.  0 = don't start PIPE2 (AI task idles on its semaphore):
-         * if sessions survive, the octal-NOR/VddIO/NPU-clock platform work
-         * is clean and the hunt narrows to PIPE2/DCMIPP interaction with
-         * the media path.  Set back to 1 after the A/B test. */
-        static volatile uint8_t ucAiPipe2Enable = 0U;
-
-        if( ucAiPipe2Enable != 0U )
-        {
-            AiDetection_PipeStart();
-        }
+        /* BISECT (2026-07-20) step 1 RESULT: PIPE2 off -> sessions survive
+         * (160s+, isnd 26ms vs ~1100ms); platform work exonerated, AI path
+         * confirmed as the killer.  Step 2: PIPE2 back ON with inference
+         * skipped in ai_detection.c (AI_BISECT_SKIP_INFERENCE) to split
+         * DCMIPP-PIPE2 traffic from NPU inference bursts. */
+        AiDetection_PipeStart();
     }
 
     /* Hot-path UART traces removed.  At 115200 baud each byte is ~87us,
