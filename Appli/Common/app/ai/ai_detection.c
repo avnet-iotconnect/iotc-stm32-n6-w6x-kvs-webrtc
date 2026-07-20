@@ -166,13 +166,21 @@ static void prvRunInference( stai_network * pxNet )
     ( void ) stai_ext_network_new_inference( pxNet );
 }
 
+/* NOR window arbitration (lfs_port_xspi.c): littlefs program/erase briefly
+ * drops the XSPI2 memory-mapped window; hold this lock whenever the CPU or
+ * NPU reads the weights region at 0x70380000. */
+extern void vNorWindowLock( void );
+extern void vNorWindowUnlock( void );
+
 /* On failure: log and park the task (NOT configASSERT — its while(1) spin
  * burned 30-60% CPU alongside streaming when init hung).  Streaming must
- * survive any AI init failure. */
+ * survive any AI init failure.  The unlock is a harmless no-op when the
+ * window lock is not held (mutex give by a non-owner just fails). */
 #define AI_CHECK( cond, tag )                                        \
     do {                                                             \
         if( !( cond ) ) {                                            \
             LogError( "[AI] init failed at %s (ret=%d) - AI disabled", tag, ret ); \
+            vNorWindowUnlock();                                      \
             for( ; ; ) { vTaskSuspend( NULL ); }                     \
         }                                                            \
     } while( 0 )
@@ -194,6 +202,10 @@ static void prvAiTask( void * pvParam )
      * The littlefs OSPI driver runs XSPI2 in INDIRECT command mode, which
      * may have torn the mapping down — probe before touching stai, because
      * init against an unmapped/garbage window hangs with no diagnostic. */
+    /* Hold the NOR window lock across probe + network init: the CPU reads
+     * the ec blobs from flash here and the window must stay mapped. */
+    vNorWindowLock();
+
     LogInfo( "[AI] XSPI1 CR=%08lx XSPI2 CR=%08lx", XSPI1->CR, XSPI2->CR );
 
     if( ( XSPI2->CR & XSPI_CR_FMODE_Msk ) != XSPI_CR_FMODE_Msk )
@@ -201,6 +213,7 @@ static void prvAiTask( void * pvParam )
         LogError( "[AI] XSPI2 not memory-mapped (FMODE=%lu) - weights at "
                   "0x70380000 unreachable; AI disabled",
                   ( XSPI2->CR & XSPI_CR_FMODE_Msk ) >> XSPI_CR_FMODE_Pos );
+        vNorWindowUnlock();
         for( ; ; ) { vTaskSuspend( NULL ); }
     }
 
@@ -227,6 +240,8 @@ static void prvAiTask( void * pvParam )
 
     ret = app_postprocess_init( &xPpParams, &xInfo );
     AI_CHECK( ret == 0, "postprocess_init" );
+
+    vNorWindowUnlock();
 
     LogInfo( "[AI] network ready: in %dx%dx%d, out %u bytes",
              AI_NN_WIDTH, AI_NN_HEIGHT, AI_NN_BPP,
@@ -256,7 +271,11 @@ static void prvAiTask( void * pvParam )
         ret = stai_network_set_outputs( ( stai_network * ) network_ctx, xOut, 1 );
         AI_CHECK( ret == STAI_SUCCESS, "set_outputs" );
 
+        /* NPU fetches weights from the mapped NOR window during epochs —
+         * exclude concurrent littlefs prog/erase which drops the window. */
+        vNorWindowLock();
         prvRunInference( ( stai_network * ) network_ctx );
+        vNorWindowUnlock();
         ulInferences++;
 
         ret = app_postprocess_run( ( void * [] ) { ucNnOutputBuf }, 1,

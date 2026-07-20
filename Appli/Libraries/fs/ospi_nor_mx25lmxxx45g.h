@@ -42,22 +42,11 @@
 #define MX25LM_NUM_SECTORS           ( MX25LM_NUM_BLOCKS * MX25LM_SECTORS_PER_BLOCK )
 #define MX25LM_MEM_SZ_BYTES          ( 1024 * MX25LM_BLOCK_SZ )
 
-/* External NOR flash map (memory-mapped at 0x70000000):
- *   0x0000000  FSBL (signed)
- *   0x0100000  Application (signed)
- *   0x0380000  AI model weights (network_data.hex, ~30 MB, ends ~0x2180000)
- *   0x2200000  littlefs  <-- OPI_START_ADDRESS (~4 MB: certs/keys/config)
- *
- * 2026-07-19: littlefs moved from 0x0A0000 above the AI weights region.
- * The previous base overlapped the canonical N6 AI weights address
- * (0x70380000): flashing the model corrupted the filesystem, and the
- * subsequent littlefs reformat/writes corrupted the model.  Moving
- * littlefs (rather than the weights) avoids regenerating the model
- * artifacts, whose absolute addresses are baked in by the ST Edge AI
- * compiler.  NOTE: changing this base orphans any existing filesystem —
- * the device must be re-provisioned after flashing a build with a new
- * value here. */
-#define OPI_START_ADDRESS            ( 0x2200000 )
+/* DEAD CODE on STM32N6: this OSPI driver + lfs_port_ospi.c compile out
+ * (HAL_OSPI_MODULE_ENABLED is not defined).  The active NOR port is
+ * lfs_port_xspi.c via the STM32_ExtMem_Manager — the littlefs base and
+ * flash map live in xspi_nor_mx66uw1g45g.h (XPI_START_ADDRESS). */
+#define OPI_START_ADDRESS            ( 10 * MX25LM_BLOCK_SZ )
 
 #define MX25LM_NUM_SECTOR_USABLE     ( 1024 - 10 )
 #define MX25LM_MEM_SZ_USABLE         ( MX25LM_NUM_SECTOR_USABLE * MX25LM_SECTOR_SZ )
