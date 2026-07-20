@@ -107,3 +107,18 @@ has camera→VENC (Pipe1, NV12 640x480) plus the full IOTCONNECT/iotcl path.
   intermittent viewer-side session freeze (TURN ChannelData suspicion,
   see chrome-dtls-channeldata memory; tonight's net was also degraded —
   20 s TLS handshakes, MQTT CONNACK retry, "long time no SDP" timeout).
+
+- 2026-07-20 SESSION-DROP ROOT CAUSE IDENTIFIED (not yet fixed): viewer
+  sessions die ~1.8 s after F0 **only when PIPE2/inference runs**; every
+  long session (F900/F1320) had AI accidentally off (FMODE park, init
+  grind, -4 start).  "first inference done" lands exactly at teardown.
+  The ~1.75 s NPU weight fetch (30 MB over XSPI2) saturates the NoC and
+  stalls the media/network path during connection-critical seconds.
+  FIX CANDIDATES, in order: (1) make inference cheap — NPU clock
+  IC6 PLL1/4->PLL1/2 in FSBL + verify XSPI2 200MHz bump took effect
+  ([PSRAM] print still shows 64MHz for XSPI1 pre-bump; check XSPI2's
+  actual kernel clock at runtime); (2) defer first inference until ~10 s
+  after session start to confirm the correlation; (3) rate-limit
+  inference (e.g. one per N seconds) until fetch time drops.  Wi-Fi and
+  power were ruled out by the user; NACK/rolling-buffer fix (capacity
+  81) is validated separately.
