@@ -93,3 +93,17 @@ has camera→VENC (Pipe1, NV12 640x480) plus the full IOTCONNECT/iotcl path.
   `Appli/Common/app/ai/` with bqueue+nn-task skeleton behind
   ENABLE_AI_DETECTION (default off), copy Model/ + minimal Lib subset,
   add PIPE2 init to media_cam.c, NPU clocks to main.c, weights to linker.
+
+- 2026-07-20: **Phase 2 COMPLETE** (build 56aa615). NPU inference runs live
+  alongside streaming: `[AI] inferences=3 dets=1 pp_ret=0`, AiDetect <1% CPU.
+  Chain of fixes that got here: littlefs base moved (real header
+  xspi_nor_mx66uw1g45g.h, 0x2200000), NOR kept memory-mapped steady-state
+  with window mutex, xAppContext+ecblob to PSRAM / app confined to
+  AXISRAM1+2, real CACHEAXI driver (npu_cache_stub.c) with post-reset
+  settle delay + RAMCFG power-up, PIPE2 started with the camera (not at AI
+  init — the boot-time start failed on the idle sensor and configASSERT
+  spun).  Streaming holds ~15 fps.  NEXT: Phase 3 telemetry (dets → iotcl),
+  Phase 4 LCD, inference-rate tuning (only ~1 Hz observed), and the
+  intermittent viewer-side session freeze (TURN ChannelData suspicion,
+  see chrome-dtls-channeldata memory; tonight's net was also degraded —
+  20 s TLS handshakes, MQTT CONNACK retry, "long time no SDP" timeout).
