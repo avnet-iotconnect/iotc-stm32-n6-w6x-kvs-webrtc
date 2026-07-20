@@ -169,6 +169,31 @@ has camera→VENC (Pipe1, NV12 640x480) plus the full IOTCONNECT/iotcl path.
   proven: retry XSPI1/PSRAM at 200 MHz — the HSLV fix likely cures the
   April corruption and doubles media-path headroom.
 
+- 2026-07-20 (late night): **SESSION-DROP ROOT CAUSE FOUND AND FIXED**
+  (b7d3496).  Bisect: PIPE2-off survived 160s+; PIPE2-on/NPU-idle showed
+  garbage PIPE1 frames and died ~10s; full AI died ~1.5s.  Cause: the
+  DCMIPP IPPLUG partition in media_cam.c predated PIPE2 and was
+  backwards for this workload — per RM0486 Client2/3 are PIPE1's Y/UV
+  planes and Client5 is PIPE2, so PIPE1-Y ran on a one-line FIFO at
+  1/16 arbitration weight, PIPE1-UV was unpartitioned, and the NN pipe
+  held 15/16 weight; starting PIPE2 corrupted PIPE1 (noise P-frames
+  8-9KB), ballooned bitrate onto the TURN uplink, and collapsed the ICE
+  session — faster with the NPU adding contention.  Fix: all five
+  clients explicitly partitioned (full 1024-entry DPREG, >=2 lines
+  each, PIPE1 Y=15/UV=7 weights over PIPE2=1, BURST_64 kept).
+  VALIDATED: full AI + streaming ran 231 s continuous — F3420 @
+  ~14.8fps, 433 inferences @ ~62ms (2Hz floor), enc=16ms isnd=26ms
+  ovr=0, heap flat, 44% idle.  REMAINING BUG (separate): session
+  closed silently at ~236s after the TURN allocation — right at the
+  refresh point of the 300s ICE-server TTL; "connection not ready"
+  close with no error suggests the TURN allocation refresh
+  fails/never happens (matches the historic "intermittent freeze on
+  long sessions").  NEXT: TURN-refresh investigation in
+  ice_controller (allocation refresh timer / permission refresh),
+  then camera scene check (Y=0xAA uniform, dets=0 — aim at objects),
+  then queued: PSRAM 200MHz retry, PIPE2 Resume test, Phase 3
+  telemetry, Phase 4 LCD.
+
 - 2026-07-20 (night): b118e27 ON-BOARD RESULTS.  HSLV fuses were ALREADY
   set (OOB demo had burned them) — the missing piece was only the
   runtime VddIO 1V8 range.  Octal DTR NOR VALIDATED: SFDP trace clean,
