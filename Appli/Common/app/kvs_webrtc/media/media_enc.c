@@ -130,25 +130,43 @@ static void prvAdaptBitrate( VencContext_t * pxCtx )
     static uint32_t ulLastPollMs  = 0U;
     static uint32_t ulLastFailSeen = 0U;
     static uint32_t ulLastFailMs  = 0U;
+    static uint8_t  ucAdaptInit   = 0U;
     uint32_t ulNowMs = HAL_GetTick();
     uint32_t ulFails = g_iceNominatedSendFailures;
     int32_t  lWantedBitrate = lActiveBitrate;
 
-    if( ( ulNowMs - ulLastPollMs ) < ENC_ADAPT_POLL_MS )
+    if( ( ucAdaptInit != 0U ) && ( ( ulNowMs - ulLastPollMs ) < ENC_ADAPT_POLL_MS ) )
     {
         return;
     }
-    ulLastPollMs = ulNowMs;
 
-    if( ulFails != ulLastFailSeen )
+    /* First call, or a >5 s gap in encoding = a new session: every session
+     * starts LOW and must earn the upshift with 30 in-session quiet
+     * seconds.  (v1 bug: "never failed yet" upshifted 0.14 s after media
+     * start, and quiet time carried across sessions — both put 1 Mbps +
+     * a QP-jolt jumbo frame on a fresh TURN path and wedged the W6X.) */
+    if( ( ucAdaptInit == 0U ) || ( ( ulNowMs - ulLastPollMs ) > 5000U ) )
     {
+        ucAdaptInit = 1U;
+        ulLastPollMs = ulNowMs;
         ulLastFailSeen = ulFails;
         ulLastFailMs = ulNowMs;
         lWantedBitrate = ENC_BITRATE_LOW_BPS;
     }
-    else if( ( ulLastFailMs == 0U ) || ( ( ulNowMs - ulLastFailMs ) >= ENC_UPSHIFT_QUIET_MS ) )
+    else
     {
-        lWantedBitrate = ENC_BITRATE_HIGH_BPS;
+        ulLastPollMs = ulNowMs;
+
+        if( ulFails != ulLastFailSeen )
+        {
+            ulLastFailSeen = ulFails;
+            ulLastFailMs = ulNowMs;
+            lWantedBitrate = ENC_BITRATE_LOW_BPS;
+        }
+        else if( ( ulNowMs - ulLastFailMs ) >= ENC_UPSHIFT_QUIET_MS )
+        {
+            lWantedBitrate = ENC_BITRATE_HIGH_BPS;
+        }
     }
 
     if( lWantedBitrate != lActiveBitrate )
