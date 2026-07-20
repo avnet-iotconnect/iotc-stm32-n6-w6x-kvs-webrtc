@@ -174,8 +174,16 @@ static void prvAdaptBitrate( VencContext_t * pxCtx )
         H264EncRateCtrl xRate;
         int ret;
 
-        prvSetupVbr( &xRate, lWantedBitrate, pxCtx->lRcGopLen, RATE_CTRL_QP_DEFAULT );
-        ret = H264EncSetRateCtrl( pxCtx->xHdl, &xRate );
+        /* Mid-stream the encoder rejects a from-scratch struct (returns
+         * H264ENC_INVALID_ARGUMENT): fetch the live settings and change
+         * only the bitrate. */
+        ret = H264EncGetRateCtrl( pxCtx->xHdl, &xRate );
+
+        if( ret == H264ENC_OK )
+        {
+            xRate.bitPerSecond = lWantedBitrate;
+            ret = H264EncSetRateCtrl( pxCtx->xHdl, &xRate );
+        }
 
         if( ret == H264ENC_OK )
         {
@@ -185,8 +193,11 @@ static void prvAdaptBitrate( VencContext_t * pxCtx )
         }
         else
         {
-            LogWarn( "[ENC] H264EncSetRateCtrl failed: %d - keeping %ld bps",
-                     ret, ( long ) lActiveBitrate );
+            /* Back off a full quiet window instead of retrying at 1 Hz. */
+            ulLastFailMs = ulNowMs;
+            LogWarn( "[ENC] rate-ctrl change failed: %d - keeping %ld bps, retry in %lus",
+                     ret, ( long ) lActiveBitrate,
+                     ( unsigned long ) ( ENC_UPSHIFT_QUIET_MS / 1000U ) );
         }
     }
 }
