@@ -88,6 +88,29 @@ has camera→VENC (Pipe1, NV12 640x480) plus the full IOTCONNECT/iotcl path.
 
 ## Session log
 
+- 2026-07-20 (final): **SESSION STABILITY RESOLVED — layered fixes, all
+  validated.**  The "session drop" was three separate bugs peeled apart
+  over one day: (1) DCMIPP IPPLUG partition starved PIPE1 when PIPE2 ran
+  (b7d3496); (2) W6X network TX credit wait was 10 s, so a module stall
+  wedged every socket incl. MQTT — bounded to 200 ms (f693cbf), plus a
+  3-strike consecutive-failure gate on the nominated ICE socket (2502df1;
+  NOTE: all LogWarn in ice_controller_net.c compile out at this log
+  level, so the gate works silently) and RTP burst pacing (3f428b6);
+  (3) LINK CAPACITY: on a degraded RF evening 1 Mbps (~100 pkt/s)
+  overruns the W6X within ~2 s of media start — the 500 kbps A/B
+  (03cc1b4) soaks cleanly (F1800+, isnd 11-18 ms, IDRs to 38 KB fine,
+  full AI at ~40 ms/inference).  NEXT on this axis: adaptive bitrate
+  (drop on consecutive send failures / raise on quiet), or ship 500 kbps
+  as the safe default.  Diagnostic legacies fixed on the way: Y-probe
+  stride ([M]Y240 now shows real luma), first-inference timing, XSPI2
+  clock print.  Phase 3 telemetry (ai_people/ai_top_conf/ai_infer_ms)
+  is live in the payload — platform template XG4EGET still needs the
+  three NUMBER attributes added via the IOTCONNECT UI.  dets=0 all
+  night: nobody in frame — verify detection with a person in view.
+  Remaining queue: PSRAM 200 MHz retry (HSLV fix unblocks it), PIPE2
+  Suspend->Resume across sessions (116297e still untested in the wild),
+  inference rate floor tuning, Phase 4 LCD re-port.
+
 - 2026-07-20 (cont.): **silent-drop fix + Phase 3 telemetry** in one build.
   (a) The ~4 min drop trigger was found in code: ANY single
   SendSocketPacket failure on the nominated ICE socket (each already
