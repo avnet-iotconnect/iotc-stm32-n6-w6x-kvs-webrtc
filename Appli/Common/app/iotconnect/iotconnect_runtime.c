@@ -24,6 +24,7 @@
 #include "../../sys/interrupt_handlers.h"
 #include "../mqtt/mqtt_agent_task.h"
 #include "../mqtt/subscription_manager.h"
+#include "../ai/ai_detection.h"
 #include "iotconnect_runtime.h"
 #include "vendor/iotcl.h"
 #include "vendor/iotcl_c2d.h"
@@ -1452,6 +1453,21 @@ static BaseType_t prvPublishDemoTelemetry( void )
     ( void ) iotcl_telemetry_set_bool( xMessage, "led_red", xIoTConnectRuntime.xLedRedOn == pdTRUE );
     ( void ) iotcl_telemetry_set_bool( xMessage, "led_green", xIoTConnectRuntime.xLedGreenOn == pdTRUE );
     ( void ) iotcl_telemetry_set_bool( xMessage, "button_user", xIoTConnectRuntime.xButtonPressed == pdTRUE );
+
+    /* Phase 3: NPU people-detection stats (only once the network is up;
+     * no-ops in non-AI builds).  The platform template needs matching
+     * NUMBER attributes: ai_people, ai_top_conf, ai_infer_ms.           */
+    {
+        int32_t lDetections = 0;
+        uint32_t ulTopConfPct = 0U, ulInferMs = 0U;
+
+        if( AiDetection_GetTelemetry( &lDetections, &ulTopConfPct, &ulInferMs, NULL ) != 0U )
+        {
+            ( void ) iotcl_telemetry_set_number( xMessage, "ai_people", ( double ) lDetections );
+            ( void ) iotcl_telemetry_set_number( xMessage, "ai_top_conf", ( double ) ulTopConfPct );
+            ( void ) iotcl_telemetry_set_number( xMessage, "ai_infer_ms", ( double ) ulInferMs );
+        }
+    }
 
     if( iotcl_mqtt_send_telemetry( xMessage, false ) == IOTCL_SUCCESS )
     {

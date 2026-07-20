@@ -88,6 +88,24 @@ has camera→VENC (Pipe1, NV12 640x480) plus the full IOTCONNECT/iotcl path.
 
 ## Session log
 
+- 2026-07-20 (cont.): **silent-drop fix + Phase 3 telemetry** in one build.
+  (a) The ~4 min drop trigger was found in code: ANY single
+  SendSocketPacket failure on the nominated ICE socket (each already
+  spans up to 1 s of EAGAIN/ENOMEM retries) closed the whole session
+  (ice_controller_net.c).  Now the nominated socket tolerates transient
+  failures — the packet is dropped (NACK/rolling-buffer recovers) and
+  only ICE_CONTROLLER_SEND_FAILURE_CLOSE_THRESHOLD (3) consecutive
+  failures close the session; non-nominated candidate pruning unchanged.
+  Look for "Transient send failure N/3" in logs.  (b) Phase 3:
+  AiDetection_GetTelemetry() snapshot (people count, top conf %, infer
+  ms) published in prvPublishDemoTelemetry as ai_people / ai_top_conf /
+  ai_infer_ms; stm32n6wrt.json updated with the matching NUMBER
+  attributes — the ACTIVE platform template (CD XG4EGET, not in repo)
+  needs the same three attributes added via the IOTCONNECT UI before
+  they appear on dashboards.  TEST: soak a viewer session well past
+  5 min; expect "Transient send failure" warnings instead of drops, and
+  ai_* fields in the telemetry payload log line.
+
 - 2026-07-18: plan written; donor surveyed (above).  No code changes yet.
   Board/dev at stable f36fa6d.  Next concrete step: create
   `Appli/Common/app/ai/` with bqueue+nn-task skeleton behind

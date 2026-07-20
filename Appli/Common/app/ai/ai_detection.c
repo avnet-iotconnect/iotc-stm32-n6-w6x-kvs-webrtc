@@ -67,6 +67,33 @@ static uint8_t ucNnInputBuf[ 2 ][ AI_NN_WIDTH * AI_NN_HEIGHT * AI_NN_BPP ] ALIGN
 static uint8_t ucNnOutputBuf[ AI_OUT_BUFFER_MAX_BYTES ] ALIGN_32 IN_PSRAM;
 static uint8_t network_ctx[ STAI_NETWORK_CONTEXT_SIZE ] ALIGN_32;
 
+/* Telemetry snapshot (Phase 3) — updated by the inference task after each
+ * postprocess, read lock-free by the IOTCONNECT app task (32-bit writes
+ * are atomic on M55; values are independent best-effort stats). */
+static volatile uint8_t  ucAiReady            = 0U;
+static volatile int32_t  lLatestDetections    = 0;
+static volatile uint32_t ulLatestTopConfPct   = 0U;
+static volatile uint32_t ulLatestInferMs      = 0U;
+static volatile uint32_t ulTotalInferences    = 0U;
+
+uint8_t AiDetection_GetTelemetry( int32_t * plDetections,
+                                  uint32_t * pulTopConfPct,
+                                  uint32_t * pulInferMs,
+                                  uint32_t * pulInferences )
+{
+    if( ucAiReady == 0U )
+    {
+        return 0U;
+    }
+
+    if( plDetections != NULL )   { *plDetections  = lLatestDetections; }
+    if( pulTopConfPct != NULL )  { *pulTopConfPct = ulLatestTopConfPct; }
+    if( pulInferMs != NULL )     { *pulInferMs    = ulLatestInferMs; }
+    if( pulInferences != NULL )  { *pulInferences = ulTotalInferences; }
+
+    return 1U;
+}
+
 /* Double-buffer state: DCMIPP writes ucNnInputBuf[ucCaptureIdx]; on frame
  * done the ISR flips the index, points PIPE2 at the fresh buffer and gives
  * the semaphore so the task processes the completed one. */
@@ -335,6 +362,8 @@ static void prvAiTask( void * pvParam )
              AI_NN_WIDTH, AI_NN_HEIGHT, AI_NN_BPP,
              ( unsigned ) xInfo.outputs[ 0 ].size_bytes );
 
+    ucAiReady = 1U;
+
     /* PIPE2 is started by the media path when the camera starts; until
      * then this loop just idles on the 1 s semaphore timeout. */
 
@@ -408,6 +437,25 @@ static void prvAiTask( void * pvParam )
 
         ret = app_postprocess_run( ( void * [] ) { ucNnOutputBuf }, 1,
                                    &xPpOut, &xPpParams );
+
+        /* Telemetry snapshot (Phase 3): count + best confidence in percent. */
+        {
+            float xTopConf = 0.0f;
+            int32_t lI;
+
+            for( lI = 0; ( lI < xPpOut.nb_detect ) && ( xPpOut.pOutBuff != NULL ); lI++ )
+            {
+                if( xPpOut.pOutBuff[ lI ].conf > xTopConf )
+                {
+                    xTopConf = xPpOut.pOutBuff[ lI ].conf;
+                }
+            }
+
+            lLatestDetections  = ( ret == 0 ) ? xPpOut.nb_detect : 0;
+            ulLatestTopConfPct = ( uint32_t ) ( xTopConf * 100.0f );
+            ulLatestInferMs    = ulLastRunMs;
+            ulTotalInferences  = ulInferences;
+        }
 
         /* Phase 3: throttled logging of detection count (telemetry Phase 4). */
         if( ( xTaskGetTickCount() - xLastLog ) > pdMS_TO_TICKS( 2000 ) )

@@ -1,117 +1,141 @@
 {
-    "code": "stm32n6wrt",
-    "name": "STM32N6 W6X KVS WebRTC",
-    "authType": 2,
-    "attributes": [
-        {
-            "name": "mode",
-            "displayName": "Application Mode",
-            "type": "STRING",
-            "description": "Firmware-reported demo mode identifier.",
-            "unit": "",
-            "aggregateTypes": []
-        },
-        {
-            "name": "firmware_version",
-            "displayName": "Firmware Version",
-            "type": "STRING",
-            "description": "Application firmware version reported by the device.",
-            "unit": "",
-            "aggregateTypes": []
-        },
-        {
-            "name": "led_red",
-            "displayName": "Red LED State",
-            "type": "BOOLEAN",
-            "description": "Current red LED state.",
-            "unit": "",
-            "aggregateTypes": []
-        },
-        {
-            "name": "led_green",
-            "displayName": "Green LED State",
-            "type": "BOOLEAN",
-            "description": "Current green LED state.",
-            "unit": "",
-            "aggregateTypes": []
-        },
-        {
-            "name": "button_user",
-            "displayName": "User Button State",
-            "type": "BOOLEAN",
-            "description": "Current user button state.",
-            "unit": "",
-            "aggregateTypes": []
-        },
-        {
-            "name": "version",
-            "displayName": "Version",
-            "type": "STRING",
-            "description": "Version string reported in sample mode.",
-            "unit": "",
-            "aggregateTypes": []
-        }
-    ],
-    "commands": [
-        {
-            "name": "Turn All LEDs Off",
-            "command": "LED_ALL_OFF",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        },
-        {
-            "name": "Turn All LEDs On",
-            "command": "LED_ALL_ON",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        },
-        {
-            "name": "Turn Red LED On",
-            "command": "LED_RED_ON",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        },
-        {
-            "name": "Turn Red LED Off",
-            "command": "LED_RED_OFF",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        },
-        {
-            "name": "Turn Green LED On",
-            "command": "LED_GREEN_ON",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        },
-        {
-            "name": "Turn Green LED Off",
-            "command": "LED_GREEN_OFF",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        }
-    ],
-    "messageVersion": "2.1",
-    "msgCode": "XG4E2G2",
-    "capability": "0",
-    "enableCSR": "false",
-    "c2dOnDemand": 0,
-    "properties": {
-        "description": "STM32N6 W6X IoT reference with KVS WebRTC video streaming.",
-        "dataFrequency": "5",
-        "fileSupport": false,
-        "videoStreamResource": "1",
-        "videoStreamType": "2",
-        "autoStartVideoStream": false,
-        "certRenewalDay": 0,
-        "enableCSR": false
-    },
-    "_meta": {
-        "version": "2.0"
-    }
+ "code": "stm32n6wrt",
+ "name": "STM32N6 W6X KVS WebRTC",
+ "authType": 2,
+ "attributes": [
+  {
+   "name": "mode",
+   "displayName": "Application Mode",
+   "type": "STRING",
+   "description": "Firmware-reported demo mode identifier.",
+   "unit": "",
+   "aggregateTypes": []
+  },
+  {
+   "name": "firmware_version",
+   "displayName": "Firmware Version",
+   "type": "STRING",
+   "description": "Application firmware version reported by the device.",
+   "unit": "",
+   "aggregateTypes": []
+  },
+  {
+   "name": "led_red",
+   "displayName": "Red LED State",
+   "type": "BOOLEAN",
+   "description": "Current red LED state.",
+   "unit": "",
+   "aggregateTypes": []
+  },
+  {
+   "name": "led_green",
+   "displayName": "Green LED State",
+   "type": "BOOLEAN",
+   "description": "Current green LED state.",
+   "unit": "",
+   "aggregateTypes": []
+  },
+  {
+   "name": "button_user",
+   "displayName": "User Button State",
+   "type": "BOOLEAN",
+   "description": "Current user button state.",
+   "unit": "",
+   "aggregateTypes": []
+  },
+  {
+   "name": "version",
+   "displayName": "Version",
+   "type": "STRING",
+   "description": "Version string reported in sample mode.",
+   "unit": "",
+   "aggregateTypes": []
+  },
+  {
+   "name": "ai_people",
+   "displayName": "AI People Count",
+   "type": "NUMBER",
+   "description": "Number of people detected by the on-device NPU (YOLOv2, latest inference).",
+   "unit": "",
+   "aggregateTypes": []
+  },
+  {
+   "name": "ai_top_conf",
+   "displayName": "AI Top Confidence",
+   "type": "NUMBER",
+   "description": "Highest detection confidence of the latest inference, percent.",
+   "unit": "%",
+   "aggregateTypes": []
+  },
+  {
+   "name": "ai_infer_ms",
+   "displayName": "AI Inference Time",
+   "type": "NUMBER",
+   "description": "Duration of the latest NPU inference in milliseconds.",
+   "unit": "ms",
+   "aggregateTypes": []
+  }
+ ],
+ "commands": [
+  {
+   "name": "Turn All LEDs Off",
+   "command": "LED_ALL_OFF",
+   "requiredParam": false,
+   "requiredAck": true,
+   "isOTACommand": false
+  },
+  {
+   "name": "Turn All LEDs On",
+   "command": "LED_ALL_ON",
+   "requiredParam": false,
+   "requiredAck": true,
+   "isOTACommand": false
+  },
+  {
+   "name": "Turn Red LED On",
+   "command": "LED_RED_ON",
+   "requiredParam": false,
+   "requiredAck": true,
+   "isOTACommand": false
+  },
+  {
+   "name": "Turn Red LED Off",
+   "command": "LED_RED_OFF",
+   "requiredParam": false,
+   "requiredAck": true,
+   "isOTACommand": false
+  },
+  {
+   "name": "Turn Green LED On",
+   "command": "LED_GREEN_ON",
+   "requiredParam": false,
+   "requiredAck": true,
+   "isOTACommand": false
+  },
+  {
+   "name": "Turn Green LED Off",
+   "command": "LED_GREEN_OFF",
+   "requiredParam": false,
+   "requiredAck": true,
+   "isOTACommand": false
+  }
+ ],
+ "messageVersion": "2.1",
+ "msgCode": "XG4E2G2",
+ "capability": "0",
+ "enableCSR": "false",
+ "c2dOnDemand": 0,
+ "properties": {
+  "description": "STM32N6 W6X IoT reference with KVS WebRTC video streaming.",
+  "dataFrequency": "5",
+  "fileSupport": false,
+  "videoStreamResource": "1",
+  "videoStreamType": "2",
+  "autoStartVideoStream": false,
+  "certRenewalDay": 0,
+  "enableCSR": false
+ },
+ "_meta": {
+  "version": "2.0"
+ }
 }

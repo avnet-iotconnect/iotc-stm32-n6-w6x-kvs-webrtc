@@ -89,6 +89,14 @@ static void icn_raw_dec( int v )
 #define ICE_CONTROLLER_RESEND_DELAY_MS ( 5 )
 #define ICE_CONTROLLER_RESEND_TIMEOUT_MS ( 1000 )
 
+/* Consecutive SendSocketPacket failures on the NOMINATED socket before the
+ * session is declared dead.  Each failure already represents up to
+ * ICE_CONTROLLER_RESEND_TIMEOUT_MS of EAGAIN/ENOMEM retries, so 3 in a row
+ * means ~3 s with zero packets out — a real link failure — while a single
+ * W6X TX hiccup (which killed a healthy 231 s session on 2026-07-20) just
+ * drops one RTP packet and lets NACK/retransmit recover it. */
+#define ICE_CONTROLLER_SEND_FAILURE_CLOSE_THRESHOLD ( 3 )
+
 static void GetLocalIPAdresses( IceEndpoint_t * pLocalIceEndpoints,
                                 size_t * pLocalIceEndpointsNum )
 {
@@ -168,6 +176,7 @@ static IceControllerResult_t CreateSocketContextUdp( IceControllerContext_t * pC
     if( pCtx->socketsContextsCount < ICE_CONTROLLER_MAX_LOCAL_CANDIDATE_COUNT )
     {
         pSocketContext = &pCtx->socketsContexts[ pCtx->socketsContextsCount++ ];
+        pSocketContext->consecutiveSendFailures = 0U;   /* slots are reused across sessions */
     }
     else
     {
@@ -300,6 +309,7 @@ static IceControllerResult_t CreateSocketContextTcp( IceControllerContext_t * pC
         if( pCtx->socketsContextsCount < ICE_CONTROLLER_MAX_LOCAL_CANDIDATE_COUNT )
         {
             pSocketContext = &pCtx->socketsContexts[ pCtx->socketsContextsCount++ ];
+            pSocketContext->consecutiveSendFailures = 0U;   /* slots are reused across sessions */
         }
         else
         {
@@ -1302,38 +1312,62 @@ IceControllerResult_t IceControllerNet_SendPacket( IceControllerContext_t * pCtx
         xSemaphoreGive( pCtx->socketMutex );
     }
 
-    if( ret == ICE_CONTROLLER_RESULT_FAIL_SOCKET_SENDTO )
+    if( ret == ICE_CONTROLLER_RESULT_OK )
     {
-        /*
-         * Socket read error detected.
-         * This typically indicates the remote peer closed the connection or WiFi disconnection.
-         * Action required: Close the local socket to properly terminate the connection.
-         */
-        ( void ) Ice_CloseCandidate( &pCtx->iceContext, pSocketContext->pLocalCandidate );
-        IceControllerNet_FreeSocketContext( pCtx, pSocketContext );
-
+        pSocketContext->consecutiveSendFailures = 0U;
+    }
+    else if( ret == ICE_CONTROLLER_RESULT_FAIL_SOCKET_SENDTO )
+    {
         if( pSocketContext == pCtx->pNominatedSocketContext )
         {
-            /* Disconnecting nominated socket connection, closing. */
-            LogWarn( ( "Unable to send packet through nominated socket, closing session: %.*s",
-                       ( int ) pCtx->iceContext.creds.combinedUsernameLength,
-                       pCtx->iceContext.creds.pCombinedUsername ) );
+            /* One failed send is NOT proof the link is dead: each failure
+             * already spans up to ICE_CONTROLLER_RESEND_TIMEOUT_MS of
+             * retries, and the W6X UDP TX path hiccups transiently under
+             * IDR bursts / AP interference.  Dropping the packet is safe —
+             * the receiver recovers via NACK/rolling-buffer retransmit.
+             * Session-fatal close killed a healthy 231 s AI+streaming
+             * session (2026-07-20); now it takes several in a row. */
+            pSocketContext->consecutiveSendFailures++;
 
-            /* Notify peer connection for closing the connection. */
-            if( pCtx->onIceEventCallbackFunc )
+            if( pSocketContext->consecutiveSendFailures < ICE_CONTROLLER_SEND_FAILURE_CLOSE_THRESHOLD )
             {
-                pCtx->onIceEventCallbackFunc( pCtx->pOnIceEventCustomContext,
-                                              ICE_CONTROLLER_CB_EVENT_ICE_CLOSE_NOTIFY,
-                                              NULL );
-                
-                /* Re-set the timer. */
-                IceController_UpdateTimerInterval( pCtx,
-                                                   ICE_CONTROLLER_CLOSING_INTERVAL_MS );
+                LogWarn( ( "Transient send failure %u/%u on nominated socket - packet dropped, session kept.",
+                           pSocketContext->consecutiveSendFailures,
+                           ICE_CONTROLLER_SEND_FAILURE_CLOSE_THRESHOLD ) );
             }
             else
             {
-                LogError( ( "There is no ICE event callback function set." ) );
+                ( void ) Ice_CloseCandidate( &pCtx->iceContext, pSocketContext->pLocalCandidate );
+                IceControllerNet_FreeSocketContext( pCtx, pSocketContext );
+
+                /* Disconnecting nominated socket connection, closing. */
+                LogWarn( ( "Unable to send packet through nominated socket, closing session: %.*s",
+                           ( int ) pCtx->iceContext.creds.combinedUsernameLength,
+                           pCtx->iceContext.creds.pCombinedUsername ) );
+
+                /* Notify peer connection for closing the connection. */
+                if( pCtx->onIceEventCallbackFunc )
+                {
+                    pCtx->onIceEventCallbackFunc( pCtx->pOnIceEventCustomContext,
+                                                  ICE_CONTROLLER_CB_EVENT_ICE_CLOSE_NOTIFY,
+                                                  NULL );
+
+                    /* Re-set the timer. */
+                    IceController_UpdateTimerInterval( pCtx,
+                                                       ICE_CONTROLLER_CLOSING_INTERVAL_MS );
+                }
+                else
+                {
+                    LogError( ( "There is no ICE event callback function set." ) );
+                }
             }
+        }
+        else
+        {
+            /* Non-nominated sockets: unchanged pre-nomination behavior —
+             * prune the candidate on first failure. */
+            ( void ) Ice_CloseCandidate( &pCtx->iceContext, pSocketContext->pLocalCandidate );
+            IceControllerNet_FreeSocketContext( pCtx, pSocketContext );
         }
     }
 

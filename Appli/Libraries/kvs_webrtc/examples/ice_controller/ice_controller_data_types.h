@@ -282,6 +282,13 @@ typedef struct IceControllerSocketContext
     /* TLS stream reassembly — allocated lazily for TLS sockets only. */
     uint8_t * pTlsRxBuf;
     size_t    tlsRxLen;
+
+    /* Consecutive SendSocketPacket failures on this socket.  Each failure
+     * already represents up to ICE_CONTROLLER_RESEND_TIMEOUT_MS (1 s) of
+     * EAGAIN/ENOMEM retries, so a single one is a W6X/AP hiccup, not a
+     * dead link — the nominated session is only closed after several in
+     * a row (see IceControllerNet_SendPacket).  Reset on any success. */
+    uint8_t consecutiveSendFailures;
 } IceControllerSocketContext_t;
 
 typedef struct IceControllerIceServerConfig

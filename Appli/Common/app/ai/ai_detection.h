@@ -28,6 +28,15 @@ void AiDetection_PipeStop( void );
  * callback. Rotates capture buffers and wakes the inference task. */
 void AiDetection_FrameDoneISR( void );
 
+/* Telemetry snapshot (Phase 3): people count, best confidence (percent),
+ * last inference duration (ms), total inference count.  Returns 0 until
+ * the network is initialised (or when AI is compiled out); any output
+ * pointer may be NULL. */
+uint8_t AiDetection_GetTelemetry( int32_t * plDetections,
+                                  uint32_t * pulTopConfPct,
+                                  uint32_t * pulInferMs,
+                                  uint32_t * pulInferences );
+
 #else /* !ENABLE_AI_DETECTION */
 
 #define AiDetection_Init()                    do {} while( 0 )
@@ -35,6 +44,7 @@ void AiDetection_FrameDoneISR( void );
 #define AiDetection_PipeStart()               do {} while( 0 )
 #define AiDetection_PipeStop()                do {} while( 0 )
 #define AiDetection_FrameDoneISR()            do {} while( 0 )
+#define AiDetection_GetTelemetry( d, c, m, n )    ( ( uint8_t ) 0U )
 
 #endif /* ENABLE_AI_DETECTION */
 
