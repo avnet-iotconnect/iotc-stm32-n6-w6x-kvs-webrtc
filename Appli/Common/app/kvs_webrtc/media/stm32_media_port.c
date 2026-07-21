@@ -485,7 +485,23 @@ static void prvPsramInit( void )
 
     mp_raw_puts( "[PSRAM] gpio OK\r\n" );
 
-    /* ── 3. XSPI1 peripheral init (prescaler = 3 for register config) ── */
+    /* ── 3. XSPI1 kernel clock = HCLK (200 MHz) ────────────────────────
+     * The April "tiny skip-all-MB P-frames" corruption at 200 MHz was a
+     * pad-voltage problem, not timing: VDDIO2 was still in 3V3 range
+     * with HSLV off, so the XSPI1 pads could not toggle above ~64 MHz
+     * cleanly.  FSBL now burns/verifies the HSLV fuse and this init sets
+     * the 1V8 range, same fix that took XSPI2 NOR to 200 MHz DTR.  The
+     * register/timing config below was already the donor's 200 MHz
+     * recipe (RL/WL 7, dummy 6, DQS, DHQC, CSHT 5).                     */
+    {
+        RCC_PeriphCLKInitTypeDef xClk = { 0 };
+        xClk.PeriphClockSelection = RCC_PERIPHCLK_XSPI1;
+        xClk.Xspi1ClockSelection  = RCC_XSPI1CLKSOURCE_HCLK;
+        rc = HAL_RCCEx_PeriphCLKConfig( &xClk );
+        mp_raw_puts( "[PSRAM] kclk->HCLK=" ); prvPsramHex32( rc ); mp_raw_puts( "\r\n" );
+    }
+
+    /* XSPI1 peripheral init (prescaler = 3 for register config) */
     ulClk = HAL_RCCEx_GetPeriphCLKFreq( RCC_PERIPHCLK_XSPI1 );
     mp_raw_puts( "[PSRAM] clkHz=" ); prvPsramHex32( ulClk ); mp_raw_puts( "\r\n" );
 
@@ -545,6 +561,35 @@ static void prvPsramInit( void )
         __DSB();
         uint32_t v = *pTest;
         mp_raw_puts( "[PSRAM] test=" ); prvPsramHex32( v ); mp_raw_puts( "\r\n" );
+
+        /* Bulk smoke-test: the April 200MHz corruption passed the single
+         * word test but broke on sustained transfers.  64KB (> 32KB
+         * D-cache, so reads reach the memory; crosses four 16KB CS
+         * boundaries) with an address-derived pattern.  Safe: nothing in
+         * .psram_bss is valid before this init completes.               */
+        {
+            volatile uint32_t *pBulk = (volatile uint32_t *)0x90000000UL;
+            uint32_t i, ulBad = 0U, ulFirst = 0xFFFFFFFFU, ulGot = 0U;
+            for( i = 0U; i < 16384U; i++ ) { pBulk[i] = ( i * 2654435761U ) ^ 0xA5A5A5A5U; }
+            __DSB();
+            SCB_CleanInvalidateDCache();
+            for( i = 0U; i < 16384U; i++ )
+            {
+                uint32_t w = pBulk[i];
+                if( w != ( ( i * 2654435761U ) ^ 0xA5A5A5A5U ) )
+                {
+                    if( ulBad == 0U ) { ulFirst = i * 4U; ulGot = w; }
+                    ulBad++;
+                }
+            }
+            mp_raw_puts( "[PSRAM] bulk64K bad=" ); prvPsramHex32( ulBad );
+            if( ulBad != 0U )
+            {
+                mp_raw_puts( " first@+" ); prvPsramHex32( ulFirst );
+                mp_raw_puts( " got=" ); prvPsramHex32( ulGot );
+            }
+            mp_raw_puts( "\r\n" );
+        }
     }
 
     mp_raw_puts( "[PSRAM] init<\r\n" );

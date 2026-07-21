@@ -119,18 +119,12 @@ int main(void)
   MX_XSPI2_Deinit();
   /* USER CODE END SysInit */
 
-  /* PeriphCommonClock_Config() (XSPI1=HCLK=200MHz) DISABLED.
-   * At 200MHz the PSRAM shows data-integrity issues in sustained bulk
-   * transfers: DCMIPP writes frame N to PSRAM, VENC reads it back, but
-   * the encoder sees "no-change" content (tiny skip-all-MB P-frames of
-   * 37-48 bytes) and eventually hangs waiting on its IRQ at frame ~4.
-   * The 32-bit DEADBEEF smoke-test passed but bulk 720p ARGB8888 frames
-   * apparently don't.  Leaving XSPI1 at the FSBL-default (HSI=64MHz)
-   * gives lower bandwidth but stable reads — user saw a real ceiling-fan
-   * image with this config before it was "upgraded".
-   *
-   * TODO: revisit 200MHz later with different MR0/DummyCycles timing,
-   * or add DelayBlockBypass/SampleShifting calibration.                 */
+  /* PeriphCommonClock_Config() stays DISABLED (it also carries a TIM
+   * prescaler change never validated here).  The XSPI1=HCLK=200MHz
+   * switch it contained now lives in prvPsramInit (stm32_media_port.c):
+   * the April 200MHz "skip-all-MB P-frames" corruption was VDDIO2 still
+   * in 3V3 range / HSLV off, fixed by the FSBL HSLV fuse + 1V8 range
+   * work that also took XSPI2 NOR to 200MHz DTR.                        */
   /* PeriphCommonClock_Config(); */
 
   /* Initialize all configured peripherals */
