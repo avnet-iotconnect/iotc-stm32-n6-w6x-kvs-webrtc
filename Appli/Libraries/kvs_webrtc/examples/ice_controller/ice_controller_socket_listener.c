@@ -68,6 +68,37 @@ static void isl_raw_hex2( unsigned int v )
     isl_raw_putc( hex[ v & 0xF ] );
 }
 
+/* Serializes mbedTLS context access against the media task's
+ * TLS_FreeRTOS_send() — defined in ice_controller_net.c, see rationale
+ * there.  Every TLS_FreeRTOS_recv() in this file must go through
+ * prvTlsRecvLocked(). */
+extern SemaphoreHandle_t xIceTlsIoMutex;
+static int32_t prvTlsRecvLocked( TlsNetworkContext_t * pTlsNetworkContext,
+                                 uint8_t * pBuffer,
+                                 size_t bufferSize )
+{
+    int32_t ret;
+
+    if( xIceTlsIoMutex != NULL )
+    {
+        if( xSemaphoreTake( xIceTlsIoMutex, pdMS_TO_TICKS( 100 ) ) != pdTRUE )
+        {
+            /* Sender holds the TLS context — report "no data yet" and let
+             * the next select() cycle retry. */
+            return 0;
+        }
+    }
+
+    ret = TLS_FreeRTOS_recv( pTlsNetworkContext, pBuffer, bufferSize );
+
+    if( xIceTlsIoMutex != NULL )
+    {
+        xSemaphoreGive( xIceTlsIoMutex );
+    }
+
+    return ret;
+}
+
 static int32_t RecvPacketUdp( IceControllerSocketContext_t * pSocketContext,
                               uint8_t * pBuffer,
                               size_t bufferSize,
@@ -171,9 +202,9 @@ static int32_t RecvPacketTls( IceControllerSocketContext_t * pSocketContext,
     int32_t ret;
 
     memcpy( pRemoteEndpoint, &( pSocketContext->pIceServer->iceEndpoint ), sizeof( IceEndpoint_t ) );
-    ret = TLS_FreeRTOS_recv( &pSocketContext->tlsSession.xTlsNetworkContext,
-                             pBuffer,
-                             bufferSize );
+    ret = prvTlsRecvLocked( &pSocketContext->tlsSession.xTlsNetworkContext,
+                            pBuffer,
+                            bufferSize );
 
     if( ret < 0 )
     {
@@ -669,7 +700,7 @@ static void HandleRxPacket( IceControllerContext_t * pCtx,
                     break;
                 }
 
-                readBytes = TLS_FreeRTOS_recv(
+                readBytes = prvTlsRecvLocked(
                     &pSocketContext->tlsSession.xTlsNetworkContext,
                     pSocketContext->pTlsRxBuf + pSocketContext->tlsRxLen,
                     space );

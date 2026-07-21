@@ -36,8 +36,8 @@ _Min_Stack_Size = 0x800;
 
 MEMORY
 {
-  ROM    (xrw) : ORIGIN = 0x34000400, LENGTH = 0x109000  /* AXISRAM1(+2 start) */
-  RAM    (xrw) : ORIGIN = 0x34109400, LENGTH = 0xF6C00   /* ends 0x34200000 = start of NPU-reserved SRAM3 */
+  ROM    (xrw) : ORIGIN = 0x34000400, LENGTH = 0x10D000  /* AXISRAM1(+2 start); +16K 2026-07-21 (code grew past old split; RAM had ~35K slack above heap) */
+  RAM    (xrw) : ORIGIN = 0x3410D400, LENGTH = 0xF2C00   /* ends 0x34200000 = start of NPU-reserved SRAM3 */
   EXTRAM (rw)  : ORIGIN = 0x90000000, LENGTH = 16M
 }
 
