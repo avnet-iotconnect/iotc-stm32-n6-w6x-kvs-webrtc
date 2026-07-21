@@ -283,12 +283,15 @@ typedef struct IceControllerSocketContext
     uint8_t * pTlsRxBuf;
     size_t    tlsRxLen;
 
-    /* Consecutive SendSocketPacket failures on this socket.  Each failure
-     * already represents up to ICE_CONTROLLER_RESEND_TIMEOUT_MS (1 s) of
-     * EAGAIN/ENOMEM retries, so a single one is a W6X/AP hiccup, not a
-     * dead link — the nominated session is only closed after several in
-     * a row (see IceControllerNet_SendPacket).  Reset on any success. */
+    /* Consecutive SendSocketPacket failures on this socket, and the tick
+     * of the FIRST failure in the current burst.  With fast-failing sends
+     * (20 ms enqueue + 200 ms retry budget) a count alone is too twitchy
+     * — three strikes can burn in <0.5 s during a brief module RF pause.
+     * The nominated session is closed only when failures are BOTH
+     * consecutive (>= threshold) AND have spanned >= the close window
+     * (see IceControllerNet_SendPacket).  Reset on any success. */
     uint8_t consecutiveSendFailures;
+    TickType_t firstSendFailureTick;
 } IceControllerSocketContext_t;
 
 typedef struct IceControllerIceServerConfig

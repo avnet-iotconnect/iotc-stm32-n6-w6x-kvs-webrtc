@@ -103,6 +103,14 @@ static void icn_raw_dec( int v )
  * drops one RTP packet and lets NACK/retransmit recover it. */
 #define ICE_CONTROLLER_SEND_FAILURE_CLOSE_THRESHOLD ( 3 )
 
+/* Minimum duration a consecutive-failure burst must span before the
+ * nominated session is closed.  The W6X module pauses TX for 100s of ms
+ * during RF retransmission bursts; sends now fail fast, so a count alone
+ * trips in <0.5 s.  3 s matches the original design intent (3 strikes x
+ * ~1.2 s of slow retries) and converts brief module pauses into a video
+ * stutter instead of a session death. */
+#define ICE_CONTROLLER_SEND_FAILURE_CLOSE_WINDOW_MS ( 3000 )
+
 /* Congestion signal for adaptive bitrate (media_enc.c): monotonic count of
  * nominated-socket send troubles (failed sends AND socket-mutex timeouts
  * behind a wedged send).  The encoder samples it once a second and drops
@@ -1334,17 +1342,27 @@ IceControllerResult_t IceControllerNet_SendPacket( IceControllerContext_t * pCtx
     {
         if( pSocketContext == pCtx->pNominatedSocketContext )
         {
-            /* One failed send is NOT proof the link is dead: each failure
-             * already spans up to ICE_CONTROLLER_RESEND_TIMEOUT_MS of
-             * retries, and the W6X UDP TX path hiccups transiently under
-             * IDR bursts / AP interference.  Dropping the packet is safe —
-             * the receiver recovers via NACK/rolling-buffer retransmit.
-             * Session-fatal close killed a healthy 231 s AI+streaming
-             * session (2026-07-20); now it takes several in a row. */
+            /* One failed send is NOT proof the link is dead: the W6X
+             * module pauses TX for 100s of ms during RF retransmission
+             * bursts, and with fast-failing sends (20 ms enqueue, 200 ms
+             * retry budget) a pure count trips in <0.5 s — a 114 s
+             * healthy 1 Mbps session was killed that way on 2026-07-20.
+             * Close only when failures are BOTH consecutive (>= count
+             * threshold) AND have spanned >= the close window: the
+             * module gets ICE_CONTROLLER_SEND_FAILURE_CLOSE_WINDOW_MS to
+             * recover no matter how many cheap strikes accumulate.
+             * Dropped packets recover via NACK/rolling-buffer. */
             pSocketContext->consecutiveSendFailures++;
             g_iceNominatedSendFailures++;
 
-            if( pSocketContext->consecutiveSendFailures < ICE_CONTROLLER_SEND_FAILURE_CLOSE_THRESHOLD )
+            if( pSocketContext->consecutiveSendFailures == 1U )
+            {
+                pSocketContext->firstSendFailureTick = xTaskGetTickCount();
+            }
+
+            if( ( pSocketContext->consecutiveSendFailures < ICE_CONTROLLER_SEND_FAILURE_CLOSE_THRESHOLD ) ||
+                ( ( xTaskGetTickCount() - pSocketContext->firstSendFailureTick ) <
+                  pdMS_TO_TICKS( ICE_CONTROLLER_SEND_FAILURE_CLOSE_WINDOW_MS ) ) )
             {
                 LogWarn( ( "Transient send failure %u/%u on nominated socket - packet dropped, session kept.",
                            pSocketContext->consecutiveSendFailures,
