@@ -88,6 +88,27 @@ has camera→VENC (Pipe1, NV12 640x480) plus the full IOTCONNECT/iotcl path.
 
 ## Session log
 
+- 2026-07-20 (close of day): **STABILITY CHAPTER CLOSED (ab16022).**
+  Final validation run: session 1 hit a genuine >3 s module outage
+  1.2 s in — the time-based gate absorbed 13 consecutive send failures
+  for the full 3 s window and then closed CORRECTLY; session 2 ran
+  165+ s (still running at capture), clean 500 kbps -> 1 Mbps upshift
+  at T+30 s, 1 Mbps sustained 135+ s, isnd 25-27 ms, ovr=0, heap FLAT
+  (double-free fix), 317 inferences at 33-70 ms.  The complete W6X fix
+  stack (one day, commits b7d3496..ab16022): DCMIPP IPPLUG repartition;
+  RX double-free heap-corruption fix (+wrapper leak); SPI TXQ 8->32 +
+  STA RXQ 16->32; 20 ms bounded enqueue under the lwIP core lock;
+  pbuf-chain abort on first error; TXN_RDY pin-level fallback; hdr-ack
+  loop cap; bounded RX enqueue (engine can no longer wedge);
+  rx_stall episode logging + 1 s network-frame escape; tcpip mbox/prio/
+  stack; EINPROGRESS as transient; ICE retry budget 200 ms; 3-strike
+  gate made TIME-BASED (>=3 fails spanning >=3 s); adaptive bitrate
+  500k<->1M (per-session LOW start, 30 s quiet upshift, get-modify-set
+  rate ctrl).  Remaining forward work: platform template attrs
+  (XG4EGET: ai_people/ai_top_conf/ai_infer_ms), dets>0 with a person
+  in frame, PSRAM 200 MHz retry, PIPE2 Suspend->Resume validation
+  (116297e), inference rate floor tuning, Phase 4 LCD re-port.
+
 - 2026-07-20 (final): **SESSION STABILITY RESOLVED — layered fixes, all
   validated.**  The "session drop" was three separate bugs peeled apart
   over one day: (1) DCMIPP IPPLUG partition starved PIPE1 when PIPE2 ran
