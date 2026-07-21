@@ -119,8 +119,22 @@
  * frame, each stall costing the ICE resend delay — measured in the media
  * heartbeat as snd~400 ms/frame vs enc~24 ms, capping video at ~2.3 fps.
  * Give the send path room for a couple of full frames in flight.
- * (TCP_MSS stays 1476 from the port header; MEMP_NUM_TCP_SEG is already
- * 255 there, comfortably above TCP_SND_QUEUELEN below.)                  */
+ * (MEMP_NUM_TCP_SEG is already 255 there, comfortably above
+ * TCP_SND_QUEUELEN below.)                                               */
+
+/* ---- Path-MTU black hole workaround (2026-07-21) -----------------------
+ * TURN-over-TLS relay sessions wedged with the diagnostic signature
+ * "[TLS] snd stall done=0 e=11" forever: small TLS segments (DTLS
+ * handshake, STUN, sub-300B frames) were delivered and ACKed, but the
+ * moment 1232-byte RTP records started flowing (~1301-1315 bytes on the
+ * wire at MSS 1476) nothing was ever ACKed again - a classic MTU black
+ * hole (validated direct-UDP media at ~1242 wire bytes passed the same
+ * uplink).  Clamp the MSS so every TCP segment stays under ~1204 wire
+ * bytes.  Costs ~2% extra header overhead on bulk TCP; TCP_SND_BUF/
+ * TCP_WND below scale with it automatically.                             */
+#undef  TCP_MSS
+#define TCP_MSS                               1150
+
 #undef  TCP_SND_BUF
 #define TCP_SND_BUF                           ( 16 * TCP_MSS )  /* ~23 KB */
 #undef  TCP_WND
