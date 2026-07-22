@@ -18,6 +18,7 @@
 #include "app_media_source_port.h"   /* SDK interface                       */
 #include "media_cam.h"
 #include "media_enc.h"
+#include "lcd_preview.h"             /* on-board LCD preview                */
 #include "media_cam_config.h"        /* VENC_*_WIDTH / HEIGHT, CAMERA_FPS   */
 
 #include "stm32n6xx_hal.h"
@@ -284,6 +285,7 @@ static void prvMediaTask( void * pvParam )
             mp_raw_puts( " heap=" ); mp_raw_dec( ( int ) xPortGetFreeHeapSize() );
             mp_raw_puts( " hwm=" ); mp_raw_dec( ( int ) uxTaskGetStackHighWaterMark( NULL ) );
             mp_raw_puts( " ovr=" ); mp_raw_dec( ( int ) g_dcmipp_ovr_count );
+            mp_raw_puts( " lur=" ); mp_raw_dec( ( int ) LcdPreview_Underruns() );
             /* Avg ms/frame since last heartbeat: encode stage, send stage,
              * and total frame period (1000/per = actual fps).             */
             {
@@ -315,6 +317,11 @@ static void prvMediaTask( void * pvParam )
         ulFrameNo++;
         ( void ) xLoopStart;   /* pacing is now handled by WaitFrame blocking */
     }
+
+    /* Hide the LCD video layer BEFORE stopping the camera: once capture
+     * stops, the ping-pong buffers freeze/get reused and the panel would
+     * show a stale or torn frame.                                       */
+    LcdPreview_Blank();
 
     /* Stop the DCMIPP camera pipeline + sensor before exiting so the
      * next viewer session finds the pipe in READY state and
@@ -616,6 +623,14 @@ int32_t AppMediaSourcePort_Init( void )
      * access to the .psram_bss buffers (frame buffers + VENC allocator).   */
     vPetWatchdog();
     prvPsramInit();
+
+    /* On-board LCD preview (LTDC): needs PSRAM (overlay buffers) and the
+     * scheduler; idempotent, and every LcdPreview_* call no-ops if this
+     * failed.                                                              */
+    vPetWatchdog();
+    mp_raw_puts( "[MP] lcd init>\r\n" );
+    LcdPreview_Init();
+    mp_raw_puts( "[MP] lcd init<\r\n" );
 
     /* Use static PSRAM buffers (placed in .psram_bss by linker)            */
     xMediaCtx.pucEncodedFrame = ucEncodedFrameBuf;

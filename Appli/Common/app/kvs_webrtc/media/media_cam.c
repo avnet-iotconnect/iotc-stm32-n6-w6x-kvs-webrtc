@@ -14,6 +14,7 @@
 #include "media_cam_config.h"   /* sensor / venc dimension macros          */
 #include "cmw_camera.h"
 #include "../../ai/ai_detection.h"
+#include "lcd_preview.h"         /* LTDC layer flip from the frame ISR      */
 #include "isp_core.h"            /* ISP_SensorInfoTypeDef                   */
 #include "FreeRTOS.h"            /* vPetWatchdog() declared in FreeRTOSConfig.h */
 #include "task.h"                /* vTaskDelay for post-start poll loop     */
@@ -980,8 +981,16 @@ int CMW_CAMERA_PIPE_FrameEventCallback( uint32_t ulPipe )
     if( ( ulPipe == DCMIPP_PIPE1 ) && ( xFrameReadySem != NULL ) )
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        uint32_t   ulDoneIdx;
 
         ulFrameEventCount++;
+
+        /* LCD preview: point LTDC Layer 1 at the just-completed ping-pong
+         * slot (same index math as MediaCam_WaitFrame).  Register writes
+         * only; latches at the panel's next vertical blanking.            */
+        ulDoneIdx = ( ulFrameEventCount - 1U ) & 1U;
+        LcdPreview_ShowFrameISR( pucPingPongY[ ulDoneIdx ],
+                                 pucPingPongUV[ ulDoneIdx ] );
 
         /* Giving a binary sem that is already "available" is a no-op and
          * does not stack — if the media task is slow and we miss events,

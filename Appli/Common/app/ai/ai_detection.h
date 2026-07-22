@@ -10,6 +10,8 @@
 
 #include <stdint.h>
 
+#include "lcd_preview.h"   /* LcdBox_t for AiDetection_GetBoxes */
+
 #if defined( ENABLE_AI_DETECTION )
 
 /* One-time init: NPU clocks/RAMs/cache/RIF + inference task creation.
@@ -37,6 +39,10 @@ uint8_t AiDetection_GetTelemetry( int32_t * plDetections,
                                   uint32_t * pulInferMs,
                                   uint32_t * pulInferences );
 
+/* Latest detection boxes (normalized, see LcdBox_t in lcd_preview.h).
+ * Copies up to ulMax boxes into pxBoxes; returns the count. */
+uint32_t AiDetection_GetBoxes( LcdBox_t * pxBoxes, uint32_t ulMax );
+
 #else /* !ENABLE_AI_DETECTION */
 
 #define AiDetection_Init()                    do {} while( 0 )
@@ -45,6 +51,7 @@ uint8_t AiDetection_GetTelemetry( int32_t * plDetections,
 #define AiDetection_PipeStop()                do {} while( 0 )
 #define AiDetection_FrameDoneISR()            do {} while( 0 )
 #define AiDetection_GetTelemetry( d, c, m, n )    ( ( uint8_t ) 0U )
+#define AiDetection_GetBoxes( b, n )              ( ( uint32_t ) 0U )
 
 #endif /* ENABLE_AI_DETECTION */
 

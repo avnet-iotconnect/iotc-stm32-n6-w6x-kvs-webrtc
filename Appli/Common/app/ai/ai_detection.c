@@ -32,6 +32,7 @@
 #include "npu_cache.h"
 #include "app_postprocess.h"
 #include "od_yolov2_pp_if.h"
+#include "lcd_preview.h"          /* LcdBox_t + overlay update */
 
 #include "ai_detection.h"
 
@@ -95,6 +96,28 @@ uint8_t AiDetection_GetTelemetry( int32_t * plDetections,
     if( pulInferences != NULL )  { *pulInferences = ulTotalInferences; }
 
     return 1U;
+}
+
+/* Latest detection boxes (normalized) — multi-word record, so unlike the
+ * scalar telemetry above both sides copy under a critical section. */
+static LcdBox_t xBoxSnap[ LCD_PREVIEW_MAX_BOXES ];
+static uint32_t ulBoxSnapCount = 0U;
+
+uint32_t AiDetection_GetBoxes( LcdBox_t * pxBoxes, uint32_t ulMax )
+{
+    uint32_t ulCount;
+
+    if( ( ucAiReady == 0U ) || ( pxBoxes == NULL ) || ( ulMax == 0U ) )
+    {
+        return 0U;
+    }
+
+    taskENTER_CRITICAL();
+    ulCount = ( ulBoxSnapCount < ulMax ) ? ulBoxSnapCount : ulMax;
+    ( void ) memcpy( pxBoxes, xBoxSnap, ulCount * sizeof( LcdBox_t ) );
+    taskEXIT_CRITICAL();
+
+    return ulCount;
 }
 
 /* Double-buffer state: DCMIPP writes ucNnInputBuf[ucCaptureIdx]; on frame
@@ -357,6 +380,16 @@ static void prvAiTask( void * pvParam )
     ret = app_postprocess_init( &xPpParams, &xInfo );
     AI_CHECK( ret == 0, "postprocess_init" );
 
+    /* BUGFIX 2026-07-21: the yolov2 UF postprocess wrapper (unlike the
+     * yolox/ssd/yolov8 ones) never assigns pOutBuff, so the NMS'd boxes
+     * were memcpy'd to address 0 (silently ignored on N6) and the
+     * top-conf telemetry loop never ran — ulLatestTopConfPct was
+     * permanently 0.  Give the postprocess a real output array. */
+    {
+        static od_pp_outBuffer_t xPpBoxes[ AI_OD_YOLOV2_PP_MAX_BOXES_LIMIT ];
+        xPpOut.pOutBuff = xPpBoxes;
+    }
+
     vNorWindowUnlock();
 
     prvAiRaw( "[AI] ready\r\n" );
@@ -458,6 +491,35 @@ static void prvAiTask( void * pvParam )
             ulLatestTopConfPct = ( uint32_t ) ( xTopConf * 100.0f );
             ulLatestInferMs    = ulLastRunMs;
             ulTotalInferences  = ulInferences;
+        }
+
+        /* Box snapshot (multi-word — needs the critical section, unlike the
+         * scalar telemetry) + LCD overlay update at the inference rate. */
+        {
+            LcdBox_t xBoxes[ LCD_PREVIEW_MAX_BOXES ];
+            uint32_t ulCount = 0U;
+            int32_t  lI;
+
+            if( ( ret == 0 ) && ( xPpOut.pOutBuff != NULL ) )
+            {
+                for( lI = 0; ( lI < xPpOut.nb_detect ) &&
+                             ( ulCount < LCD_PREVIEW_MAX_BOXES ); lI++ )
+                {
+                    xBoxes[ ulCount ].fXCenter = xPpOut.pOutBuff[ lI ].x_center;
+                    xBoxes[ ulCount ].fYCenter = xPpOut.pOutBuff[ lI ].y_center;
+                    xBoxes[ ulCount ].fWidth   = xPpOut.pOutBuff[ lI ].width;
+                    xBoxes[ ulCount ].fHeight  = xPpOut.pOutBuff[ lI ].height;
+                    xBoxes[ ulCount ].fConf    = xPpOut.pOutBuff[ lI ].conf;
+                    ulCount++;
+                }
+            }
+
+            taskENTER_CRITICAL();
+            ulBoxSnapCount = ulCount;
+            ( void ) memcpy( xBoxSnap, xBoxes, ulCount * sizeof( LcdBox_t ) );
+            taskEXIT_CRITICAL();
+
+            LcdPreview_UpdateOverlay( xBoxes, ulCount );
         }
 
         /* Phase 3: throttled logging of detection count (telemetry Phase 4). */
