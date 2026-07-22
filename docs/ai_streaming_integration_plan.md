@@ -317,3 +317,28 @@ has camera→VENC (Pipe1, NV12 640x480) plus the full IOTCONNECT/iotcl path.
   matrix now: direct-UDP LAN 165+ s AND relay-TCP WAN 5+ min, both with
   AI + adaptive bitrate.  Remaining queue: inference rate tuning,
   Phase 4 LCD re-port, IOTCONNECT template attrs (user).
+
+- 2026-07-21 (overnight): PHASE 4 LCD IMPLEMENTED (b692997), UNTESTED on
+  panel — morning bring-up next.  Architecture: ZERO-COPY NV12 scanout.
+  Scouting (workflows over donor trees) found the assumed donor
+  (x-cube-n6-ai-h264-usb-uvc) has NO LCD path (it is USB-UVC; its BSP
+  LCD driver is not even compiled); the real LTDC donors are the
+  iotc-stm32-n6-demos siblings.  Better still, the N6 LTDC supports
+  FlexYUV semi-planar 4:2:0 (HAL_LTDC_ConfigLayerFlexYUVSemiPlanar,
+  AFBLNR=height/2 confirms NV12), so Layer 1 scans the EXISTING NV12
+  ping-pong directly (BT.601 full-range in hardware, Y/UV flip per
+  frame from the DCMIPP ISR) — the validated streaming pipeline is
+  byte-identical.  Layer 2 = ARGB4444 overlay (person boxes at 5 Hz).
+  Pixel clock IC16=PLL4/64=25 MHz; RK050HR18 timings; pin audit: zero
+  conflicts (W6X uses PE15/PH8/PG2 SPI + PA3/PE9/PE10/PE13 ctrl).
+  Heartbeat gains lur= (LTDC underrun count) — watch it during
+  streaming soaks; mitigation if nonzero: lower refresh (IC16 divider)
+  or shrink overlay window.  BUGFIX en route: xPpOut.pOutBuff was NULL
+  (yolov2 UF wrapper never sets it) — boxes went to address 0 and
+  ai_top_conf telemetry was permanently 0; fixed.  Also 8bb12dd:
+  inference floor 500->200 ms (5 Hz).  SW_Crypto build not mirrored.
+  MORNING CHECKLIST: flash b692997 bin; expect "[MP] lcd init<" clean
+  boot, panel backlight on, black screen until a viewer session starts,
+  then live video + green boxes when a person is in frame; check lur=0
+  in [M] heartbeats during a streaming session; verify ai_top_conf
+  nonzero in telemetry with a person in frame.
