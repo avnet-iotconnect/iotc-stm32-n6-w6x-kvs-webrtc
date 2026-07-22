@@ -279,3 +279,31 @@ has camera→VENC (Pipe1, NV12 640x480) plus the full IOTCONNECT/iotcl path.
   Chrome); (c) chrome://webrtc-internals on the viewer side for the
   close reason; (d) re-enable/check the [isl] ChannelData traces (none
   fired in tonight's log — verify they're still compiled in).
+
+- 2026-07-21: PSRAM 200 MHz VALIDATED (8efa710).  Donor-timing diff showed
+  our prvPsramInit already matched the donor's 200 MHz recipe field-for-
+  field (RL/WL 7, dummy 6, DQS, DHQC, CSHT 5, 16KB CS boundary; N6 HAL
+  has no delay block) — the only delta was the kernel clock.  April's
+  "skip-all-MB P-frames" corruption was VDDIO2 3V3-range/HSLV-off pads,
+  cured by the same FSBL fuse + 1V8 work that fixed the NOR.  Switch
+  done inline in prvPsramInit (PeriphCommonClock_Config stays disabled —
+  it carries an unvalidated TIM prescaler change).  New 64KB bulk smoke
+  test (> D-cache, 4 CS-boundary crossings): bad=0 at 200 MHz.
+
+- 2026-07-21: TURN-TLS RELAY RESOLVED (e7af228 + af5b668) — session-drop
+  cause #6.  First off-LAN viewer forced TURN-over-TLS relay; sessions
+  died at exactly 3.1 s (close gate, correctly).  e7af228 added the
+  mbedtls I/O mutex (media-task ssl_write raced listener-task ssl_read
+  on the same ctx — real bug, not the killer) plus ALWAYS-ON raw-UART
+  send-loop diagnostics (LogWarn/LogError never print from
+  ice_controller_net.c).  One diagnostic run nailed it: "[TLS] snd stall
+  len=1232 done=0 z=40 e=11" — TCP snd_buf never drains; jam always
+  began at the first non-black (large) frame.  Small segments + all RX
+  flowed; ~1301-1315-wire-byte segments were never ACKed = path-MTU
+  black hole on the WAN uplink (validated direct-UDP media at ~1242
+  wire bytes was LAN-only and never crossed it).  af5b668: TCP_MSS
+  1476->1150 (~1204 wire max).  VALIDATED on-board: relay session 84+ s
+  and climbing, 55-69KB I-frames through the relay, clean 500k->1M
+  upshift at T+30s (sendFails=0), heap flat, AI 157 inferences 31-53 ms
+  concurrent.  ROM region +16K (linker split shift in
+  STM32N657X0HXQ_LRUN_kvs.ld; RAM keeps ~21K slack).
