@@ -15,13 +15,15 @@
 
 #include <stdint.h>
 
-/* Master switch (A/B debugging): 0 = LcdPreview_Init no-ops, every other
- * call no-ops via the ready flag — byte-identical media/network behavior
- * to a build without the LCD.  2026-07-22: first on-panel build showed
- * total relay-TX starvation (e=11 stalls on large frames, RX fine) —
- * suspects are panel/backlight power draw vs LCD-bus EMI onto the W6X
- * SPI vs software; this switch is discriminator step 1. */
-#define LCD_PREVIEW_ENABLE    ( 0 )
+/* Master switch: 0 = LcdPreview_Init no-ops, every other call no-ops via
+ * the ready flag — byte-identical media/network behavior to a build
+ * without the LCD.
+ * History: with the W6X Wi-Fi transport, an active LCD correlated with
+ * instant relay-TX starvation (RF-level interference with the module —
+ * the panel itself worked, video was visible).  On the Ethernet
+ * transport (NET_USE_ETHERNET, radio compiled out) that mechanism is
+ * gone: re-enabled 2026-07-22. */
+#define LCD_PREVIEW_ENABLE    ( 1 )
 
 /* One detection box, normalized coordinates (0..1) relative to the video
  * frame; x/y are the box CENTER (YOLO convention). */
