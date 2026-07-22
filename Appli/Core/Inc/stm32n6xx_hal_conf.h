@@ -42,7 +42,7 @@ extern "C" {
 #define HAL_DCMIPP_MODULE_ENABLED
 /*#define HAL_DMA2D_MODULE_ENABLED   */
 /*#define HAL_DTS_MODULE_ENABLED   */
-/*#define HAL_ETH_MODULE_ENABLED   */
+#define HAL_ETH_MODULE_ENABLED
 /*#define HAL_EXTI_MODULE_ENABLED   */
 /*#define HAL_FDCAN_MODULE_ENABLED   */
 /*#define HAL_GFXMMU_MODULE_ENABLED   */

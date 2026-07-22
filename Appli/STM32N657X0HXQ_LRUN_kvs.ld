@@ -37,7 +37,8 @@ _Min_Stack_Size = 0x800;
 MEMORY
 {
   ROM    (xrw) : ORIGIN = 0x34000400, LENGTH = 0x10D000  /* AXISRAM1(+2 start); +16K 2026-07-21 (code grew past old split; RAM had ~35K slack above heap) */
-  RAM    (xrw) : ORIGIN = 0x3410D400, LENGTH = 0xF2C00   /* ends 0x34200000 = start of NPU-reserved SRAM3 */
+  RAM    (xrw) : ORIGIN = 0x3410D400, LENGTH = 0xF0400   /* ends 0x341FD800 = NCRAM; was 0xF2C00 (-10K for ETH DMA carve) */
+  NCRAM  (rw)  : ORIGIN = 0x341FD800, LENGTH = 0x2800    /* ETH DMA descriptors + RX pool; MPU non-cacheable (eth_netif.c) */
   EXTRAM (rw)  : ORIGIN = 0x90000000, LENGTH = 16M
 }
 
@@ -182,6 +183,17 @@ SECTIONS
     . = ALIGN(32);
     _epsram_bss = .;
   } >EXTRAM
+
+  /* ETH DMA descriptors + RX buffer pool.  MPU marks this whole region
+   * non-cacheable at runtime (eth_netif.c prvEthMemSetup), which also
+   * memsets it — hence NOLOAD, no startup zeroing needed. */
+  .eth_nocache (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.eth_nocache)
+    *(.eth_nocache*)
+    . = ALIGN(32);
+  } >NCRAM
 
   /DISCARD/ :
   {

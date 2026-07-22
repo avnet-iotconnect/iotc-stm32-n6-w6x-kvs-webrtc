@@ -317,8 +317,22 @@ void StartDefaultTask(void *argument)
 #endif /* __USE_STSAFE__ */
 #endif /* LFS_CONFIG */
 
-#if defined(ST67W6X_RCP)
+/* Network transport: 1 = on-board Gigabit Ethernet (RJ45), 0 = ST67W6X
+ * Wi-Fi.  2026-07-22: wired selected for the show after W6X rx_stall
+ * episodes (RF/airtime) proved able to freeze TX for seconds under
+ * sustained video upload.  eth_net_main owns tcpip_init and satisfies
+ * EVT_MASK_NET_CONNECTED when DHCP binds - nothing above the socket
+ * layer knows the difference (see eth_netif.c). */
+#define NET_USE_ETHERNET 1
+
+#if defined(ST67W6X_RCP) && !NET_USE_ETHERNET
   xTaskCreate(net_main, "W6xNet", TASK_STACK_SIZE_W6X, NULL, TASK_PRIO_W6X, NULL);
+#endif
+#if NET_USE_ETHERNET
+  {
+    extern void eth_net_main(void *);
+    xTaskCreate(eth_net_main, "EthNet", TASK_STACK_SIZE_W6X, NULL, TASK_PRIO_W6X, NULL);
+  }
 #endif
 
 #if MQTT_ENABLED

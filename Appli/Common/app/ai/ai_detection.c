@@ -51,7 +51,7 @@
  * relay soak showed heap-flat 1 Mbps streaming alongside it, so 200 ms
  * (5 Hz, ~17% NPU duty) is the new floor — responsive enough for LCD
  * overlays.  Next step after the LCD lands and soaks: 100 ms. */
-#define AI_MIN_INFER_INTERVAL_MS  ( 200U )
+#define AI_MIN_INFER_INTERVAL_MS  ( 500U )   /* A/B: 200 (5Hz) wedge-test — back to validated 2Hz */
 
 /* BISECT (2026-07-20) history: step 1 (PIPE2 off) -> sessions survive;
  * step 2 (PIPE2 on, inference skipped) -> video visible but PIPE1 frames

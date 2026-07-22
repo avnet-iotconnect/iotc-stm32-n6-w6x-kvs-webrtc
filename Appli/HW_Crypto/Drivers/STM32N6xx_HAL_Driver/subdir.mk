@@ -12,6 +12,8 @@ C:/dev/slim/stm32n6570_dk_w6x_iot_reference_kvs_webrtc/Drivers/STM32N6xx_HAL_Dri
 C:/dev/slim/stm32n6570_dk_w6x_iot_reference_kvs_webrtc/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_dcmipp.c \
 C:/dev/slim/stm32n6570_dk_w6x_iot_reference_kvs_webrtc/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_dma.c \
 C:/dev/slim/stm32n6570_dk_w6x_iot_reference_kvs_webrtc/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_dma_ex.c \
+C:/dev/slim/stm32n6570_dk_w6x_iot_reference_kvs_webrtc/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_eth.c \
+C:/dev/slim/stm32n6570_dk_w6x_iot_reference_kvs_webrtc/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_eth_ex.c \
 C:/dev/slim/stm32n6570_dk_w6x_iot_reference_kvs_webrtc/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_exti.c \
 C:/dev/slim/stm32n6570_dk_w6x_iot_reference_kvs_webrtc/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_gpio.c \
 C:/dev/slim/stm32n6570_dk_w6x_iot_reference_kvs_webrtc/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_hash.c \
@@ -43,6 +45,8 @@ OBJS += \
 ./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_dcmipp.o \
 ./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_dma.o \
 ./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_dma_ex.o \
+./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_eth.o \
+./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_eth_ex.o \
 ./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_exti.o \
 ./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_gpio.o \
 ./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_hash.o \
@@ -74,6 +78,8 @@ C_DEPS += \
 ./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_dcmipp.d \
 ./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_dma.d \
 ./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_dma_ex.d \
+./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_eth.d \
+./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_eth_ex.d \
 ./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_exti.d \
 ./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_gpio.d \
 ./Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_hash.d \
@@ -155,6 +161,12 @@ Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_uart_ex.o: C:/dev/slim/stm32n6570_dk_
 	arm-none-eabi-gcc "$<" -mcpu=cortex-m55 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32N657xx -DST67_ARCH=W6X_ARCH_T02 -DUSE_CUSTOM_SYSTICK_HANDLER_IMPLEMENTATION=1 '-DMBEDTLS_CONFIG_FILE="mbedtls_config_hw.h"' '-DLFS_CONFIG=lfs_config.h' -DST67W6X_RCP -DHW_CRYPTO -DHAVE_ARPA_INET_H=1 -DENABLE_SCTP_DATA_CHANNEL=0 -DHAVE_CONFIG_H=1 -DMBEDTLS=1 -DSDP_DO_NOT_USE_CUSTOM_CONFIG -DMETRIC_PRINT_ENABLED=1 -DMBEDTLS_DTLS_DEBUG_C -DportTICK_RATE_MS=portTICK_PERIOD_MS -DLIBRARY_LOG_LEVEL=3 -DSPI_THREAD_STACK_SIZE=2048 -DENABLE_AI_DETECTION -DLL_ATON_PLATFORM=LL_ATON_PLAT_STM32N6 -DLL_ATON_OSAL=LL_ATON_OSAL_FREERTOS -DLL_ATON_RT_MODE=LL_ATON_RT_ASYNC -DLL_ATON_SW_FALLBACK -DLL_ATON_DBG_BUFFER_INFO_EXCLUDED=1 -c -O2 -ffunction-sections -fdata-sections -Wall -Wno-error=incompatible-pointer-types -fstack-usage -fcyclomatic-complexity -mcmse -MMD -MP -MF"$(@:%.o=%.d)" -MT"$@"  -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -o "$@" @"Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_uart_ex.c_includes.args"
 Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_ltdc.o: C:/dev/slim/stm32n6570_dk_w6x_iot_reference_kvs_webrtc/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_ltdc.c Drivers/STM32N6xx_HAL_Driver/subdir.mk
 	arm-none-eabi-gcc "$<" -mcpu=cortex-m55 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32N657xx -DST67_ARCH=W6X_ARCH_T02 -DUSE_CUSTOM_SYSTICK_HANDLER_IMPLEMENTATION=1 '-DMBEDTLS_CONFIG_FILE="mbedtls_config_hw.h"' '-DLFS_CONFIG=lfs_config.h' -DST67W6X_RCP -DHW_CRYPTO -DHAVE_ARPA_INET_H=1 -DENABLE_SCTP_DATA_CHANNEL=0 -DHAVE_CONFIG_H=1 -DMBEDTLS=1 -DSDP_DO_NOT_USE_CUSTOM_CONFIG -DMETRIC_PRINT_ENABLED=1 -DMBEDTLS_DTLS_DEBUG_C -DportTICK_RATE_MS=portTICK_PERIOD_MS -DLIBRARY_LOG_LEVEL=3 -DSPI_THREAD_STACK_SIZE=2048 -DENABLE_AI_DETECTION -DLL_ATON_PLATFORM=LL_ATON_PLAT_STM32N6 -DLL_ATON_OSAL=LL_ATON_OSAL_FREERTOS -DLL_ATON_RT_MODE=LL_ATON_RT_ASYNC -DLL_ATON_SW_FALLBACK -DLL_ATON_DBG_BUFFER_INFO_EXCLUDED=1 -c -O2 -ffunction-sections -fdata-sections -Wall -Wno-error=incompatible-pointer-types -fstack-usage -fcyclomatic-complexity -mcmse -MMD -MP -MF"$(@:%.o=%.d)" -MT"$@"  -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -o "$@" @"Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_ltdc.c_includes.args"
+
+Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_eth.o: C:/dev/slim/stm32n6570_dk_w6x_iot_reference_kvs_webrtc/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_eth.c Drivers/STM32N6xx_HAL_Driver/subdir.mk
+	arm-none-eabi-gcc "$<" -mcpu=cortex-m55 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32N657xx -DST67_ARCH=W6X_ARCH_T02 -DUSE_CUSTOM_SYSTICK_HANDLER_IMPLEMENTATION=1 '-DMBEDTLS_CONFIG_FILE="mbedtls_config_hw.h"' '-DLFS_CONFIG=lfs_config.h' -DST67W6X_RCP -DHW_CRYPTO -DHAVE_ARPA_INET_H=1 -DENABLE_SCTP_DATA_CHANNEL=0 -DHAVE_CONFIG_H=1 -DMBEDTLS=1 -DSDP_DO_NOT_USE_CUSTOM_CONFIG -DMETRIC_PRINT_ENABLED=1 -DMBEDTLS_DTLS_DEBUG_C -DportTICK_RATE_MS=portTICK_PERIOD_MS -DLIBRARY_LOG_LEVEL=3 -DSPI_THREAD_STACK_SIZE=2048 -DENABLE_AI_DETECTION -DLL_ATON_PLATFORM=LL_ATON_PLAT_STM32N6 -DLL_ATON_OSAL=LL_ATON_OSAL_FREERTOS -DLL_ATON_RT_MODE=LL_ATON_RT_ASYNC -DLL_ATON_SW_FALLBACK -DLL_ATON_DBG_BUFFER_INFO_EXCLUDED=1 -c -O2 -ffunction-sections -fdata-sections -Wall -Wno-error=incompatible-pointer-types -fstack-usage -fcyclomatic-complexity -mcmse -MMD -MP -MF"$(@:%.o=%.d)" -MT"$@"  -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -o "$@" @"Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_eth.c_includes.args"
+
+Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_eth_ex.o: C:/dev/slim/stm32n6570_dk_w6x_iot_reference_kvs_webrtc/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_eth_ex.c Drivers/STM32N6xx_HAL_Driver/subdir.mk
+	arm-none-eabi-gcc "$<" -mcpu=cortex-m55 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32N657xx -DST67_ARCH=W6X_ARCH_T02 -DUSE_CUSTOM_SYSTICK_HANDLER_IMPLEMENTATION=1 '-DMBEDTLS_CONFIG_FILE="mbedtls_config_hw.h"' '-DLFS_CONFIG=lfs_config.h' -DST67W6X_RCP -DHW_CRYPTO -DHAVE_ARPA_INET_H=1 -DENABLE_SCTP_DATA_CHANNEL=0 -DHAVE_CONFIG_H=1 -DMBEDTLS=1 -DSDP_DO_NOT_USE_CUSTOM_CONFIG -DMETRIC_PRINT_ENABLED=1 -DMBEDTLS_DTLS_DEBUG_C -DportTICK_RATE_MS=portTICK_PERIOD_MS -DLIBRARY_LOG_LEVEL=3 -DSPI_THREAD_STACK_SIZE=2048 -DENABLE_AI_DETECTION -DLL_ATON_PLATFORM=LL_ATON_PLAT_STM32N6 -DLL_ATON_OSAL=LL_ATON_OSAL_FREERTOS -DLL_ATON_RT_MODE=LL_ATON_RT_ASYNC -DLL_ATON_SW_FALLBACK -DLL_ATON_DBG_BUFFER_INFO_EXCLUDED=1 -c -O2 -ffunction-sections -fdata-sections -Wall -Wno-error=incompatible-pointer-types -fstack-usage -fcyclomatic-complexity -mcmse -MMD -MP -MF"$(@:%.o=%.d)" -MT"$@"  -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -o "$@" @"Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_eth_ex.c_includes.args"
 
 Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_xspi.o: C:/dev/slim/stm32n6570_dk_w6x_iot_reference_kvs_webrtc/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_xspi.c Drivers/STM32N6xx_HAL_Driver/subdir.mk
 	arm-none-eabi-gcc "$<" -mcpu=cortex-m55 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32N657xx -DST67_ARCH=W6X_ARCH_T02 -DUSE_CUSTOM_SYSTICK_HANDLER_IMPLEMENTATION=1 '-DMBEDTLS_CONFIG_FILE="mbedtls_config_hw.h"' '-DLFS_CONFIG=lfs_config.h' -DST67W6X_RCP -DHW_CRYPTO -DHAVE_ARPA_INET_H=1 -DENABLE_SCTP_DATA_CHANNEL=0 -DHAVE_CONFIG_H=1 -DMBEDTLS=1 -DSDP_DO_NOT_USE_CUSTOM_CONFIG -DMETRIC_PRINT_ENABLED=1 -DMBEDTLS_DTLS_DEBUG_C -DportTICK_RATE_MS=portTICK_PERIOD_MS -DLIBRARY_LOG_LEVEL=3 -DSPI_THREAD_STACK_SIZE=2048 -DENABLE_AI_DETECTION -DLL_ATON_PLATFORM=LL_ATON_PLAT_STM32N6 -DLL_ATON_OSAL=LL_ATON_OSAL_FREERTOS -DLL_ATON_RT_MODE=LL_ATON_RT_ASYNC -DLL_ATON_SW_FALLBACK -DLL_ATON_DBG_BUFFER_INFO_EXCLUDED=1 -c -O2 -ffunction-sections -fdata-sections -Wall -Wno-error=incompatible-pointer-types -fstack-usage -fcyclomatic-complexity -mcmse -MMD -MP -MF"$(@:%.o=%.d)" -MT"$@"  -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -o "$@" @"Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_xspi.c_includes.args"
