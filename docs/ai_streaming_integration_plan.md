@@ -307,3 +307,13 @@ has camera→VENC (Pipe1, NV12 640x480) plus the full IOTCONNECT/iotcl path.
   upshift at T+30s (sendFails=0), heap flat, AI 157 inferences 31-53 ms
   concurrent.  ROM region +16K (linker split shift in
   STM32N657X0HXQ_LRUN_kvs.ld; RAM keeps ~21K slack).
+
+- 2026-07-21 (final): RELAY VALIDATION COMPLETE (aaa92f1).  5.3+ min
+  TURN-TLS relay session at 1 Mbps, survived THREE Wi-Fi hiccups
+  ([TLS] snd stall events at T+186/266/272 s): each cost 1-2 dropped
+  packets, triggered the 500k downshift, recovered instantly, upshifted
+  back at +30 s.  Zero GATE CLOSE (12 s relay window).  Heap pinned at
+  ~149.9 KB all run; AI 597 inferences 31-65 ms concurrent.  Stability
+  matrix now: direct-UDP LAN 165+ s AND relay-TCP WAN 5+ min, both with
+  AI + adaptive bitrate.  Remaining queue: inference rate tuning,
+  Phase 4 LCD re-port, IOTCONNECT template attrs (user).
