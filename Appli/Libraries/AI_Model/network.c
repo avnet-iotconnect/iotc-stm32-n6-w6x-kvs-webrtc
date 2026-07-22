@@ -176,6 +176,16 @@ static void LL_ATON_End_EpochBlock_13(const void *epoch_block)
 {
   LL_ATON_LIB_UNUSED(epoch_block);
 
+  /* HAND-PATCH 2026-07-22 (keep if this file is regenerated!): the int8
+   * tensor at 0x342e0000 is NPU-DMA-written across the 30-65 ms of HW
+   * epochs 1-12, but the generated code invalidates it only BEFORE the
+   * HW run (_ec_blob_cache_start_func_1).  M55 speculative linefills
+   * during the run re-cache stale lines, and the CPU dequantize below
+   * then reads them -> constant/stale float output -> detections never
+   * fire.  Invalidate again HERE, after NPU DMA completed and
+   * immediately before the CPU read.                                    */
+  LL_ATON_Cache_MCU_Invalidate_Range(((uintptr_t)(ATON_LIB_PHYSICAL_TO_VIRTUAL_ADDR(0x342e0000UL + 0))), 1472);
+
   /* *** MCU cache invalidate (only) operation for unaligned buffer end address (last line) *** */
   /*     memory pool: 10 */
   /*     start: (((uintptr_t)(_mem_pool__user_io_output_0_network)) + 5856) */
