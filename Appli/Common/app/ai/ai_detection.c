@@ -463,12 +463,40 @@ static void prvAiTask( void * pvParam )
                                      * portTICK_PERIOD_MS );
         ulInferences++;
 
+        /* BUGFIX 2026-07-22: the pre-run invalidate above evicts dirty
+         * lines, but the M55 can speculatively RE-fill output lines while
+         * the 30-100 ms inference runs — the postprocess then reads
+         * pre-inference stale bytes (zeros -> sigmoid 0.5 < 0.6 conf
+         * threshold) and dets stayed 0 forever.  Invalidate again AFTER
+         * the NPU has written, immediately before the CPU reads. */
+        SCB_InvalidateDCache_by_Addr( ( uint32_t * ) ucNnOutputBuf,
+                                      ( int32_t ) xInfo.outputs[ 0 ].size_bytes );
+
         if( ulInferences == 1U )
         {
             prvAiRaw( "[AI] first inference done\r\n" );
             /* The session-drop signature was the first weight fetch stalling
              * the NoC for ~1.75 s; this number is the pass/fail evidence. */
             LogInfo( "[AI] first inference: %lu ms", ulLastRunMs );
+        }
+
+        /* One-shot input/output sanity probe: proves the NN input is a
+         * live image (values track the scene) and the raw output is
+         * non-constant.  Center-row pixels of the 224x224 RGB888 input. */
+        if( ulInferences == 10U )
+        {
+            const uint8_t * pucIn = ucNnInputBuf[ ucReadyIdx ];
+            uint32_t ulRow = 112U * AI_NN_WIDTH * 3U;
+
+            /* Input is DMA-written and CPU-uncached until now. */
+            SCB_InvalidateDCache_by_Addr( ( uint32_t * ) &pucIn[ ulRow ],
+                                          ( int32_t ) ( AI_NN_WIDTH * 3U ) );
+            LogInfo( "[AI] in-probe px56=%02x%02x%02x px112=%02x%02x%02x "
+                     "px168=%02x%02x%02x out0=%02x%02x%02x%02x",
+                     pucIn[ ulRow + 56U * 3U ], pucIn[ ulRow + 56U * 3U + 1U ], pucIn[ ulRow + 56U * 3U + 2U ],
+                     pucIn[ ulRow + 112U * 3U ], pucIn[ ulRow + 112U * 3U + 1U ], pucIn[ ulRow + 112U * 3U + 2U ],
+                     pucIn[ ulRow + 168U * 3U ], pucIn[ ulRow + 168U * 3U + 1U ], pucIn[ ulRow + 168U * 3U + 2U ],
+                     ucNnOutputBuf[ 0 ], ucNnOutputBuf[ 1 ], ucNnOutputBuf[ 2 ], ucNnOutputBuf[ 3 ] );
         }
 
         ret = app_postprocess_run( ( void * [] ) { ucNnOutputBuf }, 1,
