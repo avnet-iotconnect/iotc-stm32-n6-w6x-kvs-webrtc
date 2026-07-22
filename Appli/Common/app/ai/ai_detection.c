@@ -436,8 +436,16 @@ static void prvAiTask( void * pvParam )
         continue;
 #endif /* AI_BISECT_SKIP_INFERENCE */
 
-        /* Input written by DCMIPP, read by NPU — no CPU cache interaction.
-         * Output written by NPU, read by CPU — invalidate before use. */
+        /* BUGFIX 2026-07-22: the NPU reads the input through CACHEAXI,
+         * but DCMIPP writes new frames to PSRAM BEHIND that cache — and
+         * both 150KB input buffers fit inside it, so once cached the NPU
+         * could infer on the first frames forever (dets=0 always, output
+         * constant).  Drop the input range from the NPU cache so every
+         * run refetches the fresh frame. */
+        npu_cache_clean_invalidate_range( ( uint32_t ) ucNnInputBuf[ ucReadyIdx ],
+                                          ( uint32_t ) ucNnInputBuf[ ucReadyIdx ] +
+                                          ( AI_NN_WIDTH * AI_NN_HEIGHT * AI_NN_BPP ) );
+
         xIn[ 0 ] = ( stai_ptr ) ucNnInputBuf[ ucReadyIdx ];
         ret = stai_network_set_inputs( ( stai_network * ) network_ctx, xIn, 1 );
         AI_CHECK( ret == STAI_SUCCESS, "set_inputs" );
@@ -480,10 +488,10 @@ static void prvAiTask( void * pvParam )
             LogInfo( "[AI] first inference: %lu ms", ulLastRunMs );
         }
 
-        /* One-shot input/output sanity probe: proves the NN input is a
+        /* Recurring input/output sanity probe: proves the NN input is a
          * live image (values track the scene) and the raw output is
          * non-constant.  Center-row pixels of the 224x224 RGB888 input. */
-        if( ulInferences == 10U )
+        if( ( ulInferences % 40U ) == 10U )
         {
             const uint8_t * pucIn = ucNnInputBuf[ ucReadyIdx ];
             uint32_t ulRow = 112U * AI_NN_WIDTH * 3U;
@@ -491,12 +499,22 @@ static void prvAiTask( void * pvParam )
             /* Input is DMA-written and CPU-uncached until now. */
             SCB_InvalidateDCache_by_Addr( ( uint32_t * ) &pucIn[ ulRow ],
                                           ( int32_t ) ( AI_NN_WIDTH * 3U ) );
-            LogInfo( "[AI] in-probe px56=%02x%02x%02x px112=%02x%02x%02x "
-                     "px168=%02x%02x%02x out0=%02x%02x%02x%02x",
-                     pucIn[ ulRow + 56U * 3U ], pucIn[ ulRow + 56U * 3U + 1U ], pucIn[ ulRow + 56U * 3U + 2U ],
-                     pucIn[ ulRow + 112U * 3U ], pucIn[ ulRow + 112U * 3U + 1U ], pucIn[ ulRow + 112U * 3U + 2U ],
-                     pucIn[ ulRow + 168U * 3U ], pucIn[ ulRow + 168U * 3U + 1U ], pucIn[ ulRow + 168U * 3U + 2U ],
-                     ucNnOutputBuf[ 0 ], ucNnOutputBuf[ 1 ], ucNnOutputBuf[ 2 ], ucNnOutputBuf[ 3 ] );
+            /* Objectness logits of the 3 first anchors at the center grid
+             * cell (HWC 7x7x30, cell(3,3) => float offset 720, obj at +4
+             * within each 6-float anchor block).  Printed x1000; a person
+             * centered in frame needs one of these > ~405 (sigmoid 0.6). */
+            {
+                const float * pfOut = ( const float * ) ucNnOutputBuf;
+                uint32_t ulC = ( 3U * 7U + 3U ) * 30U;
+                LogInfo( "[AI] in-probe px56=%02x%02x%02x px112=%02x%02x%02x "
+                         "px168=%02x%02x%02x obj(x1000)=%ld,%ld,%ld",
+                         pucIn[ ulRow + 56U * 3U ], pucIn[ ulRow + 56U * 3U + 1U ], pucIn[ ulRow + 56U * 3U + 2U ],
+                         pucIn[ ulRow + 112U * 3U ], pucIn[ ulRow + 112U * 3U + 1U ], pucIn[ ulRow + 112U * 3U + 2U ],
+                         pucIn[ ulRow + 168U * 3U ], pucIn[ ulRow + 168U * 3U + 1U ], pucIn[ ulRow + 168U * 3U + 2U ],
+                         ( long ) ( pfOut[ ulC + 4U ] * 1000.0f ),
+                         ( long ) ( pfOut[ ulC + 10U ] * 1000.0f ),
+                         ( long ) ( pfOut[ ulC + 16U ] * 1000.0f ) );
+            }
         }
 
         ret = app_postprocess_run( ( void * [] ) { ucNnOutputBuf }, 1,
