@@ -44,10 +44,13 @@
 #define AI_OUT_BUFFER_MAX_BYTES   ( 64U * 1024U )
 
 /* Floor between inference starts.  Every inference streams the weights over
- * XSPI2 and competes with DCMIPP/VENC/Wi-Fi for the NoC; 2 Hz is plenty for
- * telemetry and keeps the media path safe while the octal-DTR NOR config
- * proves itself.  Raise during the rate-tuning pass. */
-#define AI_MIN_INFER_INTERVAL_MS  ( 500U )
+ * XSPI2 and competes with DCMIPP/VENC/Wi-Fi for the NoC.  Rate-tuning
+ * 2026-07-21: 500 ms (2 Hz) was the conservative bring-up floor; with
+ * octal-DTR NOR at 200 MHz an inference costs 31-65 ms and the 5+ min
+ * relay soak showed heap-flat 1 Mbps streaming alongside it, so 200 ms
+ * (5 Hz, ~17% NPU duty) is the new floor — responsive enough for LCD
+ * overlays.  Next step after the LCD lands and soaks: 100 ms. */
+#define AI_MIN_INFER_INTERVAL_MS  ( 200U )
 
 /* BISECT (2026-07-20) history: step 1 (PIPE2 off) -> sessions survive;
  * step 2 (PIPE2 on, inference skipped) -> video visible but PIPE1 frames
