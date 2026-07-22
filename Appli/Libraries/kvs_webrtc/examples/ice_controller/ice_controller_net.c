@@ -150,6 +150,17 @@ static void icn_raw_dec( int v )
  * stutter instead of a session death. */
 #define ICE_CONTROLLER_SEND_FAILURE_CLOSE_WINDOW_MS ( 3000 )
 
+/* Relay-over-TLS gets a much longer window.  On UDP, 3 s of send failures
+ * means the link is dead.  On a TCP relay, a brief RF loss burst parks
+ * lwIP TCP in exponential retransmit backoff (0.5->1->2->4 s) with the
+ * send buffer full — 3+ s of EAGAIN is normal RECOVERY, not death, and
+ * TCP delivers the backlog once the path clears.  2026-07-21: a healthy
+ * 156 s relay session at 1 Mbps was killed by exactly this ([TLS] snd
+ * stall e=11 for 3.0 s -> gate close).  RX liveness (TURN keepalives)
+ * keeps flowing during such stalls, so a genuinely dead relay is still
+ * detected by the server closing the connection / TLS recv errors. */
+#define ICE_CONTROLLER_SEND_FAILURE_CLOSE_WINDOW_TLS_MS ( 12000 )
+
 /* Congestion signal for adaptive bitrate (media_enc.c): monotonic count of
  * nominated-socket send troubles (failed sends AND socket-mutex timeouts
  * behind a wedged send).  The encoder samples it once a second and drops
@@ -1461,6 +1472,10 @@ IceControllerResult_t IceControllerNet_SendPacket( IceControllerContext_t * pCtx
              * module gets ICE_CONTROLLER_SEND_FAILURE_CLOSE_WINDOW_MS to
              * recover no matter how many cheap strikes accumulate.
              * Dropped packets recover via NACK/rolling-buffer. */
+            uint32_t closeWindowMs = ( pSocketContext->socketType == ICE_CONTROLLER_SOCKET_TYPE_TLS )
+                                     ? ICE_CONTROLLER_SEND_FAILURE_CLOSE_WINDOW_TLS_MS
+                                     : ICE_CONTROLLER_SEND_FAILURE_CLOSE_WINDOW_MS;
+
             pSocketContext->consecutiveSendFailures++;
             g_iceNominatedSendFailures++;
 
@@ -1471,7 +1486,7 @@ IceControllerResult_t IceControllerNet_SendPacket( IceControllerContext_t * pCtx
 
             if( ( pSocketContext->consecutiveSendFailures < ICE_CONTROLLER_SEND_FAILURE_CLOSE_THRESHOLD ) ||
                 ( ( xTaskGetTickCount() - pSocketContext->firstSendFailureTick ) <
-                  pdMS_TO_TICKS( ICE_CONTROLLER_SEND_FAILURE_CLOSE_WINDOW_MS ) ) )
+                  pdMS_TO_TICKS( closeWindowMs ) ) )
             {
                 LogWarn( ( "Transient send failure %u/%u on nominated socket - packet dropped, session kept.",
                            pSocketContext->consecutiveSendFailures,
