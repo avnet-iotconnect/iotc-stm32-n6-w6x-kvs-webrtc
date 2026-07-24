@@ -382,8 +382,10 @@ void MediaCam_StartDouble( uint8_t * pY0, uint8_t * pUV0,
                            uint32_t  ulCamMode )
 {
     DCMIPP_HandleTypeDef * pxHdcmipp = CMW_CAMERA_GetDCMIPPHandle();
+#if ( CAPTURE_SEMIPLANAR == 1 )
     DCMIPP_SemiPlanarDstAddressTypeDef xAddr0;
     DCMIPP_SemiPlanarDstAddressTypeDef xAddr1;
+#endif
     int ret;
 
     assert( pY0 != NULL && pUV0 != NULL && pY1 != NULL && pUV1 != NULL );
@@ -403,6 +405,7 @@ void MediaCam_StartDouble( uint8_t * pY0, uint8_t * pUV0,
     pucPingPongUV[ 1 ] = pUV1;
     ulFrameEventCount  = 0;
 
+#if ( CAPTURE_SEMIPLANAR == 1 )
     /* Configure RGB→YUV color conversion on PIPE1 so the pixel packer can
      * emit YUV420_2 (NV12).  The CMW middleware only wires this up for the
      * YUV422_1 format; for the semi-planar format we must program the
@@ -425,6 +428,12 @@ void MediaCam_StartDouble( uint8_t * pY0, uint8_t * pUV0,
         ret = HAL_DCMIPP_PIPE_EnableYUVConversion( pxHdcmipp, DCMIPP_PIPE1 );
         assert( ret == HAL_OK );
     }
+#else
+    /* YUV422_1 (single-plane) proving path: the CMW middleware already
+     * programmed + enabled the RGB→YUV matrix inside CMW_CAMERA_SetPipeConfig
+     * (cmw_camera.c YUV422_1 branch), so nothing to do here. */
+    ( void ) pxHdcmipp;
+#endif
 
     /* Print HAL state before DBM start so we can see whether the pipe is
      * READY (the HAL precondition) or stuck in BUSY/ERROR.                  */
@@ -449,6 +458,7 @@ void MediaCam_StartDouble( uint8_t * pY0, uint8_t * pUV0,
         raw_puts( "\r\n" );
     }
 
+#if ( CAPTURE_SEMIPLANAR == 1 )
     /* Assemble the semi-planar DBM address pairs.  DCMIPP checks 16-byte
      * alignment of both Y and UV addresses in the HAL start routine.        */
     xAddr0.YAddress  = ( uint32_t ) pY0;
@@ -468,6 +478,24 @@ void MediaCam_StartDouble( uint8_t * pY0, uint8_t * pUV0,
               &xAddr0, &xAddr1, ulCamMode );
     raw_puts( "[CAM] DBL SP start<r=" ); raw_dec( ( uint32_t ) ret ); raw_puts( "\r\n" );
     assert( ret == HAL_OK );
+#else
+    /* EXACT-DONOR PROVING PATH 2026-07-23: single-plane already proven NOT
+     * to feed PIPE2 (still 0xFF).  Last topology delta vs the working donor
+     * is DBM: donor PIPE1 is SINGLE-BUFFER (HAL_DCMIPP_CSI_PIPE_Start, no
+     * DBM bit); ours used DoubleBufferStart.  Replicate the donor exactly —
+     * single-buffer, single-plane — to close the PIPE1-topology hypothesis.
+     * Only pY0 is written (no ping-pong flip), so the stream tears/garbles;
+     * irrelevant, the verdict is the [AI] in-stats line.                    */
+    ( void ) pUV0;
+    ( void ) pUV1;
+    ( void ) pY1;
+    raw_puts( "[CAM] SB 1P start>\r\n" );
+    ret = HAL_DCMIPP_CSI_PIPE_Start(
+              pxHdcmipp, DCMIPP_PIPE1, DCMIPP_VIRTUAL_CHANNEL0,
+              ( uint32_t ) pY0, ulCamMode );
+    raw_puts( "[CAM] SB 1P start<r=" ); raw_dec( ( uint32_t ) ret ); raw_puts( "\r\n" );
+    assert( ret == HAL_OK );
+#endif
 
     /* The semi-planar HAL start enables the DCMIPP capture but does NOT
      * start the sensor.  CMW_CAMERA_DoubleBufferStart normally calls

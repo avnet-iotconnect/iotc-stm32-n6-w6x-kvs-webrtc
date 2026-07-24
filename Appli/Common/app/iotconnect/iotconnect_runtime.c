@@ -44,6 +44,11 @@
 #define IOTCONNECT_HTTP_TIMEOUT_RETRIES          ( 3U )
 #define IOTCONNECT_EVENT_QUEUE_LENGTH            ( 8U )
 #define IOTCONNECT_DEMO_POLL_INTERVAL_MS         ( 200U )
+/* Heartbeat publish so live values (LED/button state + NPU ai_people/
+ * ai_top_conf/ai_infer_ms) reach IOTCONNECT continuously — without this the
+ * demo task only published on a C2D command or a button press, so the boot
+ * telemetry (ai_people=0, before the camera ran) was the only sample seen. */
+#define IOTCONNECT_DEMO_PUBLISH_PERIOD_MS        ( 5000U )
 #define IOTCONNECT_SAMPLE_PERIOD_MS              ( 5000U )
 #define IOTCONNECT_ACK_MESSAGE_MAX_LEN           ( 96U )
 #define IOTCONNECT_TOPIC_BUFFER_LEN              ( 256U )
@@ -1757,6 +1762,8 @@ static void vIoTConnectDemoTask( void * pvParameters )
     ( void ) xEventGroupSetBits( xIoTConnectRuntime.xButtonEvents,
                                  IOTCONNECT_DEMO_BUTTON_EVENT );
 
+    TickType_t xLastPublish = xTaskGetTickCount();
+
     for( ;; )
     {
         if( xQueueReceive( xIoTConnectRuntime.xEventQueue,
@@ -1776,10 +1783,20 @@ static void vIoTConnectDemoTask( void * pvParameters )
             xPublishTelemetry = pdTRUE;
         }
 
+        /* Heartbeat: publish on a fixed period so live NPU detection stats
+         * (and LED/button state) stream to IOTCONNECT even with no command
+         * or button activity. */
+        if( ( xTaskGetTickCount() - xLastPublish ) >=
+            pdMS_TO_TICKS( IOTCONNECT_DEMO_PUBLISH_PERIOD_MS ) )
+        {
+            xPublishTelemetry = pdTRUE;
+        }
+
         if( xPublishTelemetry == pdTRUE )
         {
             ( void ) prvPublishDemoTelemetry();
             xPublishTelemetry = pdFALSE;
+            xLastPublish      = xTaskGetTickCount();
         }
     }
 }

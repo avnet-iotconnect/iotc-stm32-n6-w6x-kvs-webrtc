@@ -273,6 +273,19 @@ static void prvMediaTask( void * pvParam )
                      lEncodedLen );
         }
 
+        /* Feed the NPU from this working PIPE1 frame.  The DCMIPP PIPE2 shared
+         * fork is dead on this silicon (delivers only 0xFF), so detection runs
+         * off a CPU-downscale of the same NV12 frame we just encoded.  The
+         * call self-rate-limits to the inference cadence and no-ops while the
+         * NPU is busy, so the downscale (~1-2 ms) runs only ~2x/s — the frame
+         * is still stable here (DCMIPP is writing the other ping-pong buffer). */
+        {
+            extern void AiDetection_SubmitNV12( const uint8_t *, const uint8_t *,
+                                                uint32_t, uint32_t );
+            AiDetection_SubmitNV12( xCamFrame.pY, xCamFrame.pUV,
+                                    VENC_IMX335_WIDTH, VENC_IMX335_HEIGHT );
+        }
+
         /* Heartbeat every 30 frames (≈3s @ 10fps): frame#, encoded bytes,
          * heap, stack high-water-mark, DCMIPP OVR count.  Keeps enough
          * visibility to spot a freeze without saturating the UART in the

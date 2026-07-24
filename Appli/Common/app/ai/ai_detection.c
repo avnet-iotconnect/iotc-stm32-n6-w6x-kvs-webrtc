@@ -128,6 +128,102 @@ static volatile uint8_t  ucReadyIdx    = 0U;
 static SemaphoreHandle_t xFrameReady   = NULL;
 static volatile uint8_t  ucPipeRunning = 0U;
 
+/* DIAG 2026-07-23: PIPE2 delivery counters, updated in the frame ISR.
+ * ulP2Frames proves frame-done fires; ulP2CurAR captures the live shadow
+ * packer address so we can see the buf0<->buf1 flip actually latch. */
+static volatile uint32_t ulP2Frames = 0U;
+static volatile uint32_t ulP2CurAR  = 0U;
+
+/* ── PIPE1-frame -> NN input path ───────────────────────────────────────────
+ * The DCMIPP PIPE2 shared fork is dead on this silicon (proven on-board: it
+ * frames + writes every buffer but delivers only 0xFF, independent of every
+ * PIPE1/PIPE2 register setting).  Instead the NPU is fed from the WORKING
+ * PIPE1 frame: the media task hands us its just-completed NV12 640x480 frame
+ * and we CPU-downscale + YUV->RGB it into the model input.
+ *
+ * Byte order: the donor's PIPE2 packer used enable_swap=1 (R/B swapped), so
+ * the model's channel-0 is BLUE.  Match that by writing B,G,R.  If the input
+ * probe shows live values but detections never fire, flip this to 0. */
+#define AI_NN_CHANNEL_SWAP   ( 1 )
+
+/* Set true while the media task has a frame downscaled + queued and the NPU
+ * has not finished with it; blocks the media task from overwriting the input
+ * mid-inference and naturally paces submission to the inference rate. */
+static volatile uint8_t    ucAiBusy    = 0U;
+static volatile TickType_t xLastSubmit = 0;
+
+static inline uint8_t prvClamp8( int32_t lV )
+{
+    if( lV < 0 )     { return 0U; }
+    if( lV > 255 )   { return 255U; }
+    return ( uint8_t ) lV;
+}
+
+/* Nearest-neighbour downscale of an NV12 frame (srcW x srcH: Y plane then
+ * interleaved UV, 4:2:0) to AI_NN_WIDTH x AI_NN_HEIGHT RGB888, with BT.601
+ * full-range YUV->RGB (Q16 fixed point, matching the DCMIPP CSC we used). */
+static void prvDownscaleNV12toRGB( const uint8_t * pucY, const uint8_t * pucUV,
+                                   uint32_t ulSrcW, uint32_t ulSrcH,
+                                   uint8_t * pucDst )
+{
+    uint32_t ulDy;
+
+    for( ulDy = 0U; ulDy < AI_NN_HEIGHT; ulDy++ )
+    {
+        uint32_t        ulSy    = ( ulDy * ulSrcH ) / AI_NN_HEIGHT;
+        const uint8_t * pucYrow  = &pucY[ ulSy * ulSrcW ];
+        const uint8_t * pucUVrow = &pucUV[ ( ulSy >> 1 ) * ulSrcW ];
+        uint32_t        ulDx;
+
+        for( ulDx = 0U; ulDx < AI_NN_WIDTH; ulDx++ )
+        {
+            uint32_t ulSx = ( ulDx * ulSrcW ) / AI_NN_WIDTH;
+            int32_t  lY   = ( int32_t ) pucYrow[ ulSx ];
+            int32_t  lU   = ( int32_t ) pucUVrow[ ( ulSx & ~1U ) ]      - 128;
+            int32_t  lV   = ( int32_t ) pucUVrow[ ( ulSx & ~1U ) + 1U ] - 128;
+            int32_t  lR   = lY + ( ( 91881  * lV ) >> 16 );              /* 1.402  */
+            int32_t  lG   = lY - ( ( 22554  * lU + 46802 * lV ) >> 16 ); /* .344/.714 */
+            int32_t  lB   = lY + ( ( 116130 * lU ) >> 16 );             /* 1.772  */
+
+#if ( AI_NN_CHANNEL_SWAP == 1 )
+            *pucDst++ = prvClamp8( lB );
+            *pucDst++ = prvClamp8( lG );
+            *pucDst++ = prvClamp8( lR );
+#else
+            *pucDst++ = prvClamp8( lR );
+            *pucDst++ = prvClamp8( lG );
+            *pucDst++ = prvClamp8( lB );
+#endif
+        }
+    }
+}
+
+void AiDetection_SubmitNV12( const uint8_t * pucY, const uint8_t * pucUV,
+                             uint32_t ulSrcWidth, uint32_t ulSrcHeight )
+{
+    TickType_t xNow;
+
+    if( ( ucAiReady == 0U ) || ( xFrameReady == NULL ) )   { return; }
+    if( ucAiBusy != 0U )                                   { return; }  /* NPU still on prev frame */
+
+    xNow = xTaskGetTickCount();
+    if( ( xLastSubmit != 0 ) &&
+        ( ( xNow - xLastSubmit ) < pdMS_TO_TICKS( AI_MIN_INFER_INTERVAL_MS ) ) )
+    {
+        return;
+    }
+    xLastSubmit = xNow;
+
+    /* Claim BEFORE writing so a re-entrant/next-frame submit can't overwrite
+     * the buffer while the NPU reads it; AiTask clears ucAiBusy when done. */
+    ucAiBusy   = 1U;
+    ucReadyIdx = 0U;
+    prvDownscaleNV12toRGB( pucY, pucUV, ulSrcWidth, ulSrcHeight, ucNnInputBuf[ 0 ] );
+    SCB_CleanDCache_by_Addr( ( uint32_t * ) ucNnInputBuf[ 0 ],
+                             ( int32_t ) ( AI_NN_WIDTH * AI_NN_HEIGHT * AI_NN_BPP ) );
+    ( void ) xSemaphoreGive( xFrameReady );
+}
+
 /* ── NPU bring-up (from donor main.c).  AXISRAM3-6 clocks are enabled by
  *    FSBL/system init (RCC MEMENSR); those RAMs are reserved for the NPU
  *    activation pools by the linker map — see STM32N657X0HXQ_LRUN_kvs.ld. ── */
@@ -162,12 +258,23 @@ void AiDetection_PipeInit( int lSensorWidth, int lSensorHeight )
     xConf.output_height = AI_NN_HEIGHT;
     xConf.output_format = AI_NN_FORMAT;
     xConf.output_bpp    = AI_NN_BPP;
-    xConf.mode          = CMW_Aspect_ratio_fit;
+    /* ROOT-CAUSE FIX 2026-07-22 (dets=0 / solid-white NN input): with
+     * CMW_Aspect_ratio_fit the middleware leaves PIPE2's CROP block
+     * DISABLED (crop_conf stays zeroed -> DisableCrop), and on the shared
+     * pipe1/pipe2 flow the branch then delivers saturated full-scale
+     * samples (every byte 0xFF; probes/register dumps 2026-07-22, gamma
+     * and P1-YUVCR pokes both eliminated).  The working donor
+     * (x-cube-n6-ai-h264-usb-uvc) differs in exactly one register: its
+     * manual_roi covers the FULL sensor, so crop is ENABLED with a
+     * full-frame window while decimation/downsize ratios are identical.
+     * Mirror that: manual_roi over the whole sensor. */
+    xConf.mode          = CMW_Aspect_ratio_manual_roi;
+    xConf.manual_conf.offset_x = 0;
+    xConf.manual_conf.offset_y = 0;
+    xConf.manual_conf.width    = ( uint32_t ) lSensorWidth;
+    xConf.manual_conf.height   = ( uint32_t ) lSensorHeight;
     xConf.enable_swap   = 1;
     xConf.enable_gamma_conversion = 0;
-
-    ( void ) lSensorWidth;
-    ( void ) lSensorHeight;
 
     ret = CMW_CAMERA_SetPipeConfig( DCMIPP_PIPE2, &xConf, &ulHwPitch );
     configASSERT( ret == HAL_OK );
@@ -176,35 +283,14 @@ void AiDetection_PipeInit( int lSensorWidth, int lSensorHeight )
     LogInfo( "[AI] PIPE2 configured %dx%d RGB888", AI_NN_WIDTH, AI_NN_HEIGHT );
 }
 
-/* Called from the media path when the camera actually starts (PIPE1 DBL
- * start) — NOT from AI init: at boot the sensor is idle and the start
- * fails.  The old configASSERT here spun at 40-60% CPU on that failure. */
+/* PIPE2 is intentionally NOT started: its shared-ISP fork is dead on this
+ * silicon (delivers only 0xFF regardless of every register setting — proven
+ * on-board).  The NPU is instead fed from the working PIPE1 frame via
+ * AiDetection_SubmitNV12(), called by the media task.  This stays a defined
+ * symbol (the media path calls it) but does nothing. */
 void AiDetection_PipeStart( void )
 {
-    int ret;
-
-    if( ucPipeRunning != 0U )
-    {
-        return;
-    }
-
-    ucCaptureIdx = 0U;
-    ret = CMW_CAMERA_Start( DCMIPP_PIPE2, ucNnInputBuf[ 0 ], CMW_MODE_CONTINUOUS );
-
-    if( ret != HAL_OK )
-    {
-        /* PipeStop uses Suspend, so on the second and later camera starts
-         * the pipe is resumed, not started (Start returns -4/busy then). */
-        ret = CMW_CAMERA_Resume( DCMIPP_PIPE2 );
-    }
-
-    if( ret != HAL_OK )
-    {
-        LogError( "[AI] PIPE2 start failed: %d - detection idle", ret );
-        return;
-    }
-
-    ucPipeRunning = 1U;
+    LogInfo( "[AI] PIPE2 disabled (dead shared fork); NN fed from PIPE1 downscale" );
 }
 
 void AiDetection_PipeStop( void )
@@ -227,6 +313,10 @@ void AiDetection_FrameDoneISR( void )
 
     /* Completed buffer becomes ready; DCMIPP continues into the other. */
     ucReadyIdx   = ucCaptureIdx;
+    /* DIAG 2026-07-23: count frames + snapshot the live shadow packer
+     * address to confirm the buf0<->buf1 flip actually latches. */
+    ulP2Frames++;
+    ulP2CurAR = CMW_CAMERA_GetDCMIPPHandle()->Instance->P2CPPM0AR1;
     ucCaptureIdx = ( uint8_t ) ( 1U - ucCaptureIdx );
     ( void ) HAL_DCMIPP_PIPE_SetMemoryAddress( CMW_CAMERA_GetDCMIPPHandle(),
                                                DCMIPP_PIPE2,
@@ -413,12 +503,11 @@ static void prvAiTask( void * pvParam )
             continue;
         }
 
-        /* Rate floor: drop frames that arrive too soon after the last run. */
-        if( ( ulInferences != 0U ) &&
-            ( ( xTaskGetTickCount() - xLastInferStart ) < pdMS_TO_TICKS( AI_MIN_INFER_INTERVAL_MS ) ) )
-        {
-            continue;
-        }
+        /* Rate-limiting is owned by AiDetection_SubmitNV12 (the media task
+         * only downscales + signals at the inference cadence and never while
+         * ucAiBusy is set), so every frame taken here is meant to be run —
+         * do NOT 'continue' past this point without clearing ucAiBusy, or the
+         * media task will never submit again. */
 
 #if ( AI_BISECT_SKIP_INFERENCE == 1 )
         /* PIPE2 frames arrive and rotate; NPU stays idle.  Heartbeat shows
@@ -482,39 +571,9 @@ static void prvAiTask( void * pvParam )
 
         if( ulInferences == 1U )
         {
-            prvAiRaw( "[AI] first inference done\r\n" );
-            /* The session-drop signature was the first weight fetch stalling
-             * the NoC for ~1.75 s; this number is the pass/fail evidence. */
+            /* First-inference timing: the NoC-stall pass/fail evidence from
+             * the weight-fetch bring-up era; cheap, keep it. */
             LogInfo( "[AI] first inference: %lu ms", ulLastRunMs );
-        }
-
-        /* Recurring input/output sanity probe: proves the NN input is a
-         * live image (values track the scene) and the raw output is
-         * non-constant.  Center-row pixels of the 224x224 RGB888 input. */
-        if( ( ulInferences % 40U ) == 10U )
-        {
-            const uint8_t * pucIn = ucNnInputBuf[ ucReadyIdx ];
-            uint32_t ulRow = 112U * AI_NN_WIDTH * 3U;
-
-            /* Input is DMA-written and CPU-uncached until now. */
-            SCB_InvalidateDCache_by_Addr( ( uint32_t * ) &pucIn[ ulRow ],
-                                          ( int32_t ) ( AI_NN_WIDTH * 3U ) );
-            /* Objectness logits of the 3 first anchors at the center grid
-             * cell (HWC 7x7x30, cell(3,3) => float offset 720, obj at +4
-             * within each 6-float anchor block).  Printed x1000; a person
-             * centered in frame needs one of these > ~405 (sigmoid 0.6). */
-            {
-                const float * pfOut = ( const float * ) ucNnOutputBuf;
-                uint32_t ulC = ( 3U * 7U + 3U ) * 30U;
-                LogInfo( "[AI] in-probe px56=%02x%02x%02x px112=%02x%02x%02x "
-                         "px168=%02x%02x%02x obj(x1000)=%ld,%ld,%ld",
-                         pucIn[ ulRow + 56U * 3U ], pucIn[ ulRow + 56U * 3U + 1U ], pucIn[ ulRow + 56U * 3U + 2U ],
-                         pucIn[ ulRow + 112U * 3U ], pucIn[ ulRow + 112U * 3U + 1U ], pucIn[ ulRow + 112U * 3U + 2U ],
-                         pucIn[ ulRow + 168U * 3U ], pucIn[ ulRow + 168U * 3U + 1U ], pucIn[ ulRow + 168U * 3U + 2U ],
-                         ( long ) ( pfOut[ ulC + 4U ] * 1000.0f ),
-                         ( long ) ( pfOut[ ulC + 10U ] * 1000.0f ),
-                         ( long ) ( pfOut[ ulC + 16U ] * 1000.0f ) );
-            }
         }
 
         ret = app_postprocess_run( ( void * [] ) { ucNnOutputBuf }, 1,
@@ -576,6 +635,10 @@ static void prvAiTask( void * pvParam )
                      ( unsigned ) ulInferences,
                      ( int ) xPpOut.nb_detect, ret, ulLastRunMs );
         }
+
+        /* NN input buffer is free again — let the media task downscale the
+         * next PIPE1 frame into it. */
+        ucAiBusy = 0U;
     }
 }
 

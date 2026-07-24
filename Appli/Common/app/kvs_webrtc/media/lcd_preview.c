@@ -189,6 +189,10 @@ void LcdPreview_Init( void )
 {
     LTDC_LayerCfgTypeDef xOvl = { 0 };
 
+#if ( LCD_PREVIEW_ENABLE == 0 )
+    return;               /* A/B switch: LCD fully inert, see lcd_preview.h */
+#endif
+
     if( ucLcdReady != 0U )
     {
         return;
