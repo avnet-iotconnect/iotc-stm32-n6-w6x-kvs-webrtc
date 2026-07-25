@@ -53,6 +53,45 @@ static inline void icn_raw_putc( char c )
 }
 static void icn_raw_puts( const char *s ) { while( *s ) icn_raw_putc( *s++ ); }
 static void icn_raw_putn( const char *s, int n ) { while( n-- > 0 ) icn_raw_putc( *s++ ); }
+
+/* Always-on diagnostics for TLS (TURN relay) send failures.  LogWarn/LogError
+ * from this file never reach the log (see 2026-07-20 notes) and icn_raw_* is
+ * gated by KVS_RAW_TRACE, so the 2026-07-21 relay-session deaths were fully
+ * silent: every send returned WANT_WRITE for 3 s and the close gate fired
+ * without a single line explaining why.  These helpers are NOT gated; they
+ * are used only on failure exits (bounded to a few lines per second). */
+static inline void icn_diag_putc( char c )
+{
+    for( uint32_t i = 0; i < 600000UL; i++ )
+    {
+        if( *(volatile uint32_t *)0x56000C1CUL & ( 1UL << 7 ) )
+        {
+            *(volatile uint32_t *)0x56000C28UL = ( uint32_t ) c;
+            return;
+        }
+    }
+}
+static void icn_diag_puts( const char *s ) { while( *s ) icn_diag_putc( *s++ ); }
+static void icn_diag_dec( int v )
+{
+    char buf[ 12 ];
+    int  n = 0;
+    if( v < 0 ) { icn_diag_putc( '-' ); v = -v; }
+    if( v == 0 ) { icn_diag_putc( '0' ); return; }
+    while( ( v > 0 ) && ( n < 11 ) ) { buf[ n++ ] = ( char ) ( '0' + ( v % 10 ) ); v /= 10; }
+    while( n-- > 0 ) icn_diag_putc( buf[ n ] );
+}
+
+/* Serializes mbedTLS context access on ICE TLS (TURN) sockets.  The media
+ * task calls TLS_FreeRTOS_send() while the socket-listener task calls
+ * TLS_FreeRTOS_recv()/ContinueHandshake() on the SAME mbedtls_ssl_context.
+ * mbedTLS contexts are not thread-safe — ssl_read can emit handshake/alert
+ * writes and ssl_write begins by flushing pending output, so concurrent
+ * entry can corrupt the out-direction state (matching the 2026-07-21
+ * signature: sends permanently WANT_WRITE while recv kept working).  One
+ * static leaf mutex suffices: post-nomination only one TLS socket carries
+ * traffic.  Created lazily at first TLS connect; never deleted. */
+SemaphoreHandle_t xIceTlsIoMutex = NULL;
 static void icn_raw_dec( int v )
 {
     char buf[ 12 ];
@@ -87,7 +126,46 @@ static void icn_raw_dec( int v )
  * lwipopts.h) EAGAIN is rare, and when it does hit, a 50 ms sleep per
  * retry dominated frame time on the TURN-TLS path. */
 #define ICE_CONTROLLER_RESEND_DELAY_MS ( 5 )
-#define ICE_CONTROLLER_RESEND_TIMEOUT_MS ( 1000 )
+/* 1000 -> 200 (2026-07-20): the retry loop runs while HOLDING the ICE
+ * socketMutex, and each lap re-enters lwIP (which takes the global core
+ * lock for up to the W6X enqueue timeout).  A 1 s budget meant one
+ * congested send could hold the mutex ~1.2 s, starving STUN responses on
+ * the RX task.  200 ms keeps the mutex hold bounded; the 3-strike gate
+ * absorbs the resulting per-packet failures. */
+#define ICE_CONTROLLER_RESEND_TIMEOUT_MS ( 200 )
+
+/* Consecutive SendSocketPacket failures on the NOMINATED socket before the
+ * session is declared dead.  Each failure already represents up to
+ * ICE_CONTROLLER_RESEND_TIMEOUT_MS of EAGAIN/ENOMEM retries, so 3 in a row
+ * means ~3 s with zero packets out — a real link failure — while a single
+ * W6X TX hiccup (which killed a healthy 231 s session on 2026-07-20) just
+ * drops one RTP packet and lets NACK/retransmit recover it. */
+#define ICE_CONTROLLER_SEND_FAILURE_CLOSE_THRESHOLD ( 3 )
+
+/* Minimum duration a consecutive-failure burst must span before the
+ * nominated session is closed.  The W6X module pauses TX for 100s of ms
+ * during RF retransmission bursts; sends now fail fast, so a count alone
+ * trips in <0.5 s.  3 s matches the original design intent (3 strikes x
+ * ~1.2 s of slow retries) and converts brief module pauses into a video
+ * stutter instead of a session death. */
+#define ICE_CONTROLLER_SEND_FAILURE_CLOSE_WINDOW_MS ( 3000 )
+
+/* Relay-over-TLS gets a much longer window.  On UDP, 3 s of send failures
+ * means the link is dead.  On a TCP relay, a brief RF loss burst parks
+ * lwIP TCP in exponential retransmit backoff (0.5->1->2->4 s) with the
+ * send buffer full — 3+ s of EAGAIN is normal RECOVERY, not death, and
+ * TCP delivers the backlog once the path clears.  2026-07-21: a healthy
+ * 156 s relay session at 1 Mbps was killed by exactly this ([TLS] snd
+ * stall e=11 for 3.0 s -> gate close).  RX liveness (TURN keepalives)
+ * keeps flowing during such stalls, so a genuinely dead relay is still
+ * detected by the server closing the connection / TLS recv errors. */
+#define ICE_CONTROLLER_SEND_FAILURE_CLOSE_WINDOW_TLS_MS ( 12000 )
+
+/* Congestion signal for adaptive bitrate (media_enc.c): monotonic count of
+ * nominated-socket send troubles (failed sends AND socket-mutex timeouts
+ * behind a wedged send).  The encoder samples it once a second and drops
+ * to the low bitrate tier whenever it advances. */
+volatile uint32_t g_iceNominatedSendFailures = 0U;
 
 static void GetLocalIPAdresses( IceEndpoint_t * pLocalIceEndpoints,
                                 size_t * pLocalIceEndpointsNum )
@@ -168,6 +246,7 @@ static IceControllerResult_t CreateSocketContextUdp( IceControllerContext_t * pC
     if( pCtx->socketsContextsCount < ICE_CONTROLLER_MAX_LOCAL_CANDIDATE_COUNT )
     {
         pSocketContext = &pCtx->socketsContexts[ pCtx->socketsContextsCount++ ];
+        pSocketContext->consecutiveSendFailures = 0U;   /* slots are reused across sessions */
     }
     else
     {
@@ -300,6 +379,7 @@ static IceControllerResult_t CreateSocketContextTcp( IceControllerContext_t * pC
         if( pCtx->socketsContextsCount < ICE_CONTROLLER_MAX_LOCAL_CANDIDATE_COUNT )
         {
             pSocketContext = &pCtx->socketsContexts[ pCtx->socketsContextsCount++ ];
+            pSocketContext->consecutiveSendFailures = 0U;   /* slots are reused across sessions */
         }
         else
         {
@@ -325,6 +405,13 @@ static IceControllerResult_t CreateSocketContextTcp( IceControllerContext_t * pC
 
         credentials.disableSni = pdTRUE;
         pSocketContext->tlsSession.xTlsNetworkContext.pParams = &pSocketContext->tlsSession.xTlsTransportParams;
+
+        /* First TLS socket in this image: create the shared mbedTLS I/O
+         * serialization mutex (see definition at top of file). */
+        if( xIceTlsIoMutex == NULL )
+        {
+            xIceTlsIoMutex = xSemaphoreCreateMutex();
+        }
 
         LogInfo( ( "Establishing a TLS session with %s:%d.",
                    pRemoteIpPos,
@@ -448,6 +535,8 @@ static IceControllerResult_t SendSocketPacket( IceControllerSocketContext_t * pS
     IceControllerResult_t ret = ICE_CONTROLLER_RESULT_OK;
     int sentBytes, sendTotalBytes = 0;
     uint32_t totalDelayMs = 0;
+    uint32_t zeroLaps = 0;
+    uint8_t tlsLocked;
     #if LIBRARY_LOG_LEVEL >= LOG_VERBOSE
     char ipBuffer[ INET_ADDRSTRLEN ];
     #endif /* #if LIBRARY_LOG_LEVEL >= LOG_VERBOSE  */
@@ -478,9 +567,30 @@ static IceControllerResult_t SendSocketPacket( IceControllerSocketContext_t * pS
              * when diagnosing sender wedges. */
             vPetWatchdog();
             icn_raw_putc( 'W' );
-            sentBytes = TLS_FreeRTOS_send( &pSocketContext->tlsSession.xTlsNetworkContext,
-                                           pBuffer + sendTotalBytes,
-                                           length - sendTotalBytes );
+            tlsLocked = 0U;
+            if( xIceTlsIoMutex != NULL )
+            {
+                if( xSemaphoreTake( xIceTlsIoMutex, pdMS_TO_TICKS( 50 ) ) == pdTRUE )
+                {
+                    tlsLocked = 1U;
+                }
+            }
+            if( ( xIceTlsIoMutex == NULL ) || ( tlsLocked == 1U ) )
+            {
+                sentBytes = TLS_FreeRTOS_send( &pSocketContext->tlsSession.xTlsNetworkContext,
+                                               pBuffer + sendTotalBytes,
+                                               length - sendTotalBytes );
+                if( tlsLocked == 1U )
+                {
+                    xSemaphoreGive( xIceTlsIoMutex );
+                }
+            }
+            else
+            {
+                /* Listener holds the TLS I/O mutex — treat as a
+                 * WANT_WRITE lap and retry. */
+                sentBytes = 0;
+            }
             icn_raw_putc( 'w' );
             vPetWatchdog();
         }
@@ -503,11 +613,14 @@ static IceControllerResult_t SendSocketPacket( IceControllerSocketContext_t * pS
                 if( ICE_CONTROLLER_RESEND_TIMEOUT_MS <= totalDelayMs )
                 {
                     LogWarn( ( "Fail to send (EAGAIN) before timeout: %dms", ICE_CONTROLLER_RESEND_TIMEOUT_MS ) );
+                    icn_diag_puts( ( pSocketContext->socketType == ICE_CONTROLLER_SOCKET_TYPE_TLS ) ?
+                                   "[TLS] snd EAGAIN-to\r\n" : "[UDP] snd EAGAIN-to\r\n" );
                     ret = ICE_CONTROLLER_RESULT_FAIL_SOCKET_SENDTO;
                     break;
                 }
             }
-            else if( ( errno == ENOMEM ) || ( errno == ENOSPC ) || ( errno == ENOBUFS ) )
+            else if( ( errno == ENOMEM ) || ( errno == ENOSPC ) || ( errno == ENOBUFS ) ||
+                     ( errno == EINPROGRESS ) )   /* W6X txq-full maps to ERR_INPROGRESS — transient, retry */
             {
                 vTaskDelay( pdMS_TO_TICKS( ICE_CONTROLLER_RESEND_DELAY_MS ) );
                 totalDelayMs += ICE_CONTROLLER_RESEND_DELAY_MS;
@@ -515,6 +628,7 @@ static IceControllerResult_t SendSocketPacket( IceControllerSocketContext_t * pS
                 if( ICE_CONTROLLER_RESEND_TIMEOUT_MS <= totalDelayMs )
                 {
                     LogWarn( ( "Fail to send before timeout: %dms", ICE_CONTROLLER_RESEND_TIMEOUT_MS ) );
+                    icn_diag_puts( "[icn] snd nomem-to e=" ); icn_diag_dec( errno ); icn_diag_puts( "\r\n" );
                     ret = ICE_CONTROLLER_RESULT_FAIL_SOCKET_SENDTO;
                     break;
                 }
@@ -522,6 +636,8 @@ static IceControllerResult_t SendSocketPacket( IceControllerSocketContext_t * pS
             else
             {
                 LogWarn( ( "Failed to send to socket fd: %d error, errno(%d): %s", pSocketContext->socketFd, errno, strerror( errno ) ) );
+                icn_diag_puts( "[icn] snd hard-err fd=" ); icn_diag_dec( pSocketContext->socketFd );
+                icn_diag_puts( " e=" ); icn_diag_dec( errno ); icn_diag_puts( "\r\n" );
                 LogVerbose( ( "Source family: %d, IP:port: %s:%u",
                               pSocketContext->pLocalCandidate->endpoint.transportAddress.family,
                               IceControllerNet_LogIpAddressInfo( &pSocketContext->pLocalCandidate->endpoint, ipBuffer, sizeof( ipBuffer ) ),
@@ -539,12 +655,30 @@ static IceControllerResult_t SendSocketPacket( IceControllerSocketContext_t * pS
         {
             /* TLS_FreeRTOS_send returns 0 for WANT_READ/WANT_WRITE/TIMEOUT.
              * Treat as a transient retry: yield, pet watchdog, and time out. */
+            zeroLaps++;
             vTaskDelay( pdMS_TO_TICKS( ICE_CONTROLLER_RESEND_DELAY_MS ) );
             vPetWatchdog();
             totalDelayMs += ICE_CONTROLLER_RESEND_DELAY_MS;
 
             if( ICE_CONTROLLER_RESEND_TIMEOUT_MS <= totalDelayMs )
             {
+                /* Rate-limited (1/s) diagnostic: distinguishes "TCP send
+                 * buffer never drained" (done=0, many zero laps, errno
+                 * EWOULDBLOCK from the BIO) from "mbedTLS accepted partial
+                 * bytes then stalled" (done>0). */
+                {
+                    static TickType_t xLastTlsSndDiag = 0;
+                    TickType_t xNow = xTaskGetTickCount();
+                    if( ( xNow - xLastTlsSndDiag ) >= pdMS_TO_TICKS( 1000 ) )
+                    {
+                        xLastTlsSndDiag = xNow;
+                        icn_diag_puts( "[TLS] snd stall len=" ); icn_diag_dec( ( int ) length );
+                        icn_diag_puts( " done=" ); icn_diag_dec( sendTotalBytes );
+                        icn_diag_puts( " z=" ); icn_diag_dec( ( int ) zeroLaps );
+                        icn_diag_puts( " e=" ); icn_diag_dec( errno );
+                        icn_diag_puts( "\r\n" );
+                    }
+                }
                 ret = ICE_CONTROLLER_RESULT_FAIL_SOCKET_SENDTO;
                 break;
             }
@@ -569,7 +703,24 @@ void IceControllerNet_FreeSocketContext( IceControllerContext_t * pCtx,
         {
             if( pSocketContext->socketType == ICE_CONTROLLER_SOCKET_TYPE_TLS )
             {
-                retTlsTransport = TLS_FreeRTOS_Disconnect( &pSocketContext->tlsSession.xTlsNetworkContext );
+                /* Take the TLS I/O mutex so we never free the mbedTLS
+                 * context out from under the listener's in-flight recv
+                 * (socketMutex -> tlsIo, same order as the send path). */
+                if( ( xIceTlsIoMutex == NULL ) ||
+                    ( xSemaphoreTake( xIceTlsIoMutex, pdMS_TO_TICKS( 500 ) ) == pdTRUE ) )
+                {
+                    retTlsTransport = TLS_FreeRTOS_Disconnect( &pSocketContext->tlsSession.xTlsNetworkContext );
+
+                    if( xIceTlsIoMutex != NULL )
+                    {
+                        xSemaphoreGive( xIceTlsIoMutex );
+                    }
+                }
+                else
+                {
+                    retTlsTransport = TLS_FreeRTOS_Disconnect( &pSocketContext->tlsSession.xTlsNetworkContext );
+                }
+
                 if( retTlsTransport != TLS_TRANSPORT_SUCCESS )
                 {
                     LogWarn( ( "Fail to disconnect TLS session with return %d", retTlsTransport ) );
@@ -1232,6 +1383,7 @@ IceControllerResult_t IceControllerNet_SendPacket( IceControllerContext_t * pCtx
         {
             icn_raw_puts( "[icn] sockMtx<TIMEOUT\r\n" );
             LogError( ( "socketMutex timeout (1500 ms) — prior send wedged" ) );
+            g_iceNominatedSendFailures++;   /* congestion signal for adaptive bitrate */
             ret = ICE_CONTROLLER_RESULT_FAIL_MUTEX_TAKE;
         }
     }
@@ -1302,38 +1454,84 @@ IceControllerResult_t IceControllerNet_SendPacket( IceControllerContext_t * pCtx
         xSemaphoreGive( pCtx->socketMutex );
     }
 
-    if( ret == ICE_CONTROLLER_RESULT_FAIL_SOCKET_SENDTO )
+    if( ret == ICE_CONTROLLER_RESULT_OK )
     {
-        /*
-         * Socket read error detected.
-         * This typically indicates the remote peer closed the connection or WiFi disconnection.
-         * Action required: Close the local socket to properly terminate the connection.
-         */
-        ( void ) Ice_CloseCandidate( &pCtx->iceContext, pSocketContext->pLocalCandidate );
-        IceControllerNet_FreeSocketContext( pCtx, pSocketContext );
-
+        pSocketContext->consecutiveSendFailures = 0U;
+    }
+    else if( ret == ICE_CONTROLLER_RESULT_FAIL_SOCKET_SENDTO )
+    {
         if( pSocketContext == pCtx->pNominatedSocketContext )
         {
-            /* Disconnecting nominated socket connection, closing. */
-            LogWarn( ( "Unable to send packet through nominated socket, closing session: %.*s",
-                       ( int ) pCtx->iceContext.creds.combinedUsernameLength,
-                       pCtx->iceContext.creds.pCombinedUsername ) );
+            /* One failed send is NOT proof the link is dead: the W6X
+             * module pauses TX for 100s of ms during RF retransmission
+             * bursts, and with fast-failing sends (20 ms enqueue, 200 ms
+             * retry budget) a pure count trips in <0.5 s — a 114 s
+             * healthy 1 Mbps session was killed that way on 2026-07-20.
+             * Close only when failures are BOTH consecutive (>= count
+             * threshold) AND have spanned >= the close window: the
+             * module gets ICE_CONTROLLER_SEND_FAILURE_CLOSE_WINDOW_MS to
+             * recover no matter how many cheap strikes accumulate.
+             * Dropped packets recover via NACK/rolling-buffer. */
+            uint32_t closeWindowMs = ( pSocketContext->socketType == ICE_CONTROLLER_SOCKET_TYPE_TLS )
+                                     ? ICE_CONTROLLER_SEND_FAILURE_CLOSE_WINDOW_TLS_MS
+                                     : ICE_CONTROLLER_SEND_FAILURE_CLOSE_WINDOW_MS;
 
-            /* Notify peer connection for closing the connection. */
-            if( pCtx->onIceEventCallbackFunc )
+            pSocketContext->consecutiveSendFailures++;
+            g_iceNominatedSendFailures++;
+
+            if( pSocketContext->consecutiveSendFailures == 1U )
             {
-                pCtx->onIceEventCallbackFunc( pCtx->pOnIceEventCustomContext,
-                                              ICE_CONTROLLER_CB_EVENT_ICE_CLOSE_NOTIFY,
-                                              NULL );
-                
-                /* Re-set the timer. */
-                IceController_UpdateTimerInterval( pCtx,
-                                                   ICE_CONTROLLER_CLOSING_INTERVAL_MS );
+                pSocketContext->firstSendFailureTick = xTaskGetTickCount();
+            }
+
+            if( ( pSocketContext->consecutiveSendFailures < ICE_CONTROLLER_SEND_FAILURE_CLOSE_THRESHOLD ) ||
+                ( ( xTaskGetTickCount() - pSocketContext->firstSendFailureTick ) <
+                  pdMS_TO_TICKS( closeWindowMs ) ) )
+            {
+                LogWarn( ( "Transient send failure %u/%u on nominated socket - packet dropped, session kept.",
+                           pSocketContext->consecutiveSendFailures,
+                           ICE_CONTROLLER_SEND_FAILURE_CLOSE_THRESHOLD ) );
             }
             else
             {
-                LogError( ( "There is no ICE event callback function set." ) );
+                icn_diag_puts( "[icn] GATE CLOSE fails=" );
+                icn_diag_dec( ( int ) pSocketContext->consecutiveSendFailures );
+                icn_diag_puts( " span=" );
+                icn_diag_dec( ( int ) ( ( xTaskGetTickCount() - pSocketContext->firstSendFailureTick ) *
+                                        portTICK_PERIOD_MS ) );
+                icn_diag_puts( "ms\r\n" );
+
+                ( void ) Ice_CloseCandidate( &pCtx->iceContext, pSocketContext->pLocalCandidate );
+                IceControllerNet_FreeSocketContext( pCtx, pSocketContext );
+
+                /* Disconnecting nominated socket connection, closing. */
+                LogWarn( ( "Unable to send packet through nominated socket, closing session: %.*s",
+                           ( int ) pCtx->iceContext.creds.combinedUsernameLength,
+                           pCtx->iceContext.creds.pCombinedUsername ) );
+
+                /* Notify peer connection for closing the connection. */
+                if( pCtx->onIceEventCallbackFunc )
+                {
+                    pCtx->onIceEventCallbackFunc( pCtx->pOnIceEventCustomContext,
+                                                  ICE_CONTROLLER_CB_EVENT_ICE_CLOSE_NOTIFY,
+                                                  NULL );
+
+                    /* Re-set the timer. */
+                    IceController_UpdateTimerInterval( pCtx,
+                                                       ICE_CONTROLLER_CLOSING_INTERVAL_MS );
+                }
+                else
+                {
+                    LogError( ( "There is no ICE event callback function set." ) );
+                }
             }
+        }
+        else
+        {
+            /* Non-nominated sockets: unchanged pre-nomination behavior —
+             * prune the candidate on first failure. */
+            ( void ) Ice_CloseCandidate( &pCtx->iceContext, pSocketContext->pLocalCandidate );
+            IceControllerNet_FreeSocketContext( pCtx, pSocketContext );
         }
     }
 
@@ -1418,7 +1616,19 @@ IceControllerResult_t IceControllerNet_ExecuteTlsHandshake( IceControllerContext
     {
         if( xSemaphoreTake( pCtx->socketMutex, portMAX_DELAY ) == pdTRUE )
         {
-            transportResult = TLS_FreeRTOS_ContinueHandshake( &( pSocketContext->tlsSession.xTlsNetworkContext ) );
+            /* Nested inside socketMutex — same order as the send path
+             * (SendPacket: socketMutex -> SendSocketPacket: tlsIo), so no
+             * inversion is possible. */
+            if( ( xIceTlsIoMutex == NULL ) ||
+                ( xSemaphoreTake( xIceTlsIoMutex, portMAX_DELAY ) == pdTRUE ) )
+            {
+                transportResult = TLS_FreeRTOS_ContinueHandshake( &( pSocketContext->tlsSession.xTlsNetworkContext ) );
+
+                if( xIceTlsIoMutex != NULL )
+                {
+                    xSemaphoreGive( xIceTlsIoMutex );
+                }
+            }
 
             xSemaphoreGive( pCtx->socketMutex );
         }

@@ -1122,6 +1122,32 @@ IceControllerResult_t IceController_AddressClosing( IceControllerContext_t * pCt
             }
         }
 
+        /* Bounded deadline: if the TURN release is never confirmed, force the
+         * lingering sockets closed so the close can complete instead of looping
+         * in CLOSING forever (which would wedge the peer-connection slot and
+         * make the master silently drop every new viewer). */
+        if( isAnySocketAlive != 0U )
+        {
+            uint64_t closingElapsedMs = ( NetworkingUtils_GetCurrentTimeUs( NULL ) / 1000 ) - pCtx->closingStartMs;
+
+            if( closingElapsedMs >= ICE_CONTROLLER_CLOSING_TIMEOUT_MS )
+            {
+                LogWarn( ( "TURN release not confirmed after %lu ms; forcing socket teardown to release the peer-connection slot.",
+                           ( unsigned long ) closingElapsedMs ) );
+
+                for( i = 0; i < pCtx->socketsContextsCount; i++ )
+                {
+                    if( pCtx->socketsContexts[i].state != ICE_CONTROLLER_SOCKET_CONTEXT_STATE_NONE )
+                    {
+                        IceControllerNet_FreeSocketContext( pCtx,
+                                                            &pCtx->socketsContexts[i] );
+                    }
+                }
+
+                isAnySocketAlive = 0U;
+            }
+        }
+
         /* Send request for local candidates. */
         if( isAnySocketAlive != 0U )
         {
@@ -1244,6 +1270,7 @@ IceControllerResult_t IceController_Destroy( IceControllerContext_t * pCtx )
     else if( ( ret == ICE_CONTROLLER_RESULT_OK ) && ( needReleaseTurnResource != 0U ) )
     {
         LogInfo( ( "Waiting for TURN session to be released." ) );
+        pCtx->closingStartMs = NetworkingUtils_GetCurrentTimeUs( NULL ) / 1000;
         IceController_UpdateTimerInterval( pCtx, ICE_CONTROLLER_CLOSING_INTERVAL_MS );
     }
     else

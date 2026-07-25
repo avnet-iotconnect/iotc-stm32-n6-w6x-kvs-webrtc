@@ -75,6 +75,17 @@ extern "C" {
 #define ICE_CONTROLLER_PERIODIC_TIMER_INTERVAL_MS ( 1000 )
 #define ICE_CONTROLLER_CLOSING_INTERVAL_MS ( 100 )
 
+/* Bounded deadline for the CLOSING state.  On a relay (TURN) session close we
+ * send a refresh with lifetime 0 and keep the socket alive until the TURN
+ * server confirms the release.  On the W6X relay that confirmation never
+ * arrives, so without a deadline the socket stays alive, ICE_CLOSED is never
+ * emitted, and the peer-connection slot is stuck in CLOSING forever — after
+ * both slots wedge, the master silently drops every new viewer.  Once the close
+ * has waited this long (wall-clock) we force the lingering sockets closed and
+ * emit ICE_CLOSED anyway so the slot re-arms.  2 s is ample for a legitimate
+ * release round-trip while keeping viewer reconnects snappy. */
+#define ICE_CONTROLLER_CLOSING_TIMEOUT_MS ( 2000 )
+
 /* Expiration timeout in mili-seconds.
  * W6x WiFi module: TURN allocation over TCP TLS takes ~20s, then
  * relay pairs must complete CREATE_PERMISSION → CHANNEL_BIND → WAITING
@@ -282,6 +293,16 @@ typedef struct IceControllerSocketContext
     /* TLS stream reassembly — allocated lazily for TLS sockets only. */
     uint8_t * pTlsRxBuf;
     size_t    tlsRxLen;
+
+    /* Consecutive SendSocketPacket failures on this socket, and the tick
+     * of the FIRST failure in the current burst.  With fast-failing sends
+     * (20 ms enqueue + 200 ms retry budget) a count alone is too twitchy
+     * — three strikes can burn in <0.5 s during a brief module RF pause.
+     * The nominated session is closed only when failures are BOTH
+     * consecutive (>= threshold) AND have spanned >= the close window
+     * (see IceControllerNet_SendPacket).  Reset on any success. */
+    uint8_t consecutiveSendFailures;
+    TickType_t firstSendFailureTick;
 } IceControllerSocketContext_t;
 
 typedef struct IceControllerIceServerConfig
@@ -405,6 +426,10 @@ typedef struct IceControllerContext
 
     uint64_t connectivityCheckTimeoutMs;
     uint8_t addLocalCandidates;
+    /* Wall-clock ms when the CLOSING wait for a TURN release began; the sockets
+     * are force-closed once the wait exceeds ICE_CONTROLLER_CLOSING_TIMEOUT_MS
+     * so a stuck relay release cannot wedge the peer-connection slot. */
+    uint64_t closingStartMs;
 } IceControllerContext_t;
 
 #ifdef __cplusplus

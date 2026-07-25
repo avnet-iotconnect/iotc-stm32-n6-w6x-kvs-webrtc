@@ -81,7 +81,32 @@
  * CAPTURE_BPP is 1 here because DCMIPP's PixelPipePitch register programs
  * the Y-plane row pitch only (UV plane pitch equals Y pitch in NV12 —
  * 1280 bytes of interleaved UV per row, half as many UV rows).            */
-#define CAPTURE_FORMAT   DCMIPP_PIXEL_PACKER_FORMAT_YUV420_2
-#define CAPTURE_BPP      1
+/* MECHANISM PROOF 2026-07-23 (dets=0 / PIPE2 all-0xFF): the shared pixel
+ * fork (PIPEDIFF=0) never delivers pixels to PIPE2 while PIPE1 runs the
+ * 2-plane semi-planar NV12 packer.  The working donor runs PIPE1 as a
+ * SINGLE-PLANE packer and its shared PIPE2 gets pixels.  Flip PIPE1 to the
+ * single-plane YUV422_1 (YUYV) packer to test whether that restores the
+ * fork.  This is the master switch and the instant revert point:
+ *   CAPTURE_SEMIPLANAR 1 -> NV12 2-plane (validated streaming, PIPE2 dead)
+ *   CAPTURE_SEMIPLANAR 0 -> YUV422_1 single-plane (proving build)
+ * NOTE: in the proving build the H264 encoder + LCD still interpret the
+ * buffer as NV12, so the streamed/preview video will look WRONG on purpose.
+ * The verdict is the UART [AI] in-stats line: values below 255 = the fork
+ * is fixed.  If confirmed, the VENC/LCD plumbing is converted to YUYV in a
+ * follow-up so the stream is correct too. */
+/* Back to NV12 for validated streaming: the single-plane experiments
+ * proved PIPE1's packer topology has NO effect on PIPE2 (the shared fork
+ * is broken independently), so there is nothing to gain from single-plane.
+ * The NN is now fed by CPU-downscaling this NV12 frame (AiDetection_SubmitNV12),
+ * bypassing the dead PIPE2 fork entirely. */
+#define CAPTURE_SEMIPLANAR   ( 1 )
+
+#if ( CAPTURE_SEMIPLANAR == 1 )
+    #define CAPTURE_FORMAT   DCMIPP_PIXEL_PACKER_FORMAT_YUV420_2
+    #define CAPTURE_BPP      1
+#else
+    #define CAPTURE_FORMAT   DCMIPP_PIXEL_PACKER_FORMAT_YUV422_1
+    #define CAPTURE_BPP      2
+#endif
 
 #endif /* MEDIA_CAM_CONFIG_H */

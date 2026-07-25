@@ -56,6 +56,33 @@
             "unit": "",
             "attributeColor": "",
             "aggregateTypes": []
+        },
+        {
+            "name": "ai_people",
+            "displayName": "AI People Count",
+            "type": "NUMBER",
+            "description": "Number of people detected by the on-device NPU (YOLOv2, latest inference).",
+            "unit": "",
+            "attributeColor": "",
+            "aggregateTypes": []
+        },
+        {
+            "name": "ai_top_conf",
+            "displayName": "AI Top Confidence",
+            "type": "NUMBER",
+            "description": "Highest detection confidence of the latest inference, percent.",
+            "unit": "%",
+            "attributeColor": "",
+            "aggregateTypes": []
+        },
+        {
+            "name": "ai_infer_ms",
+            "displayName": "AI Inference Time",
+            "type": "NUMBER",
+            "description": "Duration of the latest NPU inference in milliseconds.",
+            "unit": "ms",
+            "attributeColor": "",
+            "aggregateTypes": []
         }
     ],
     "commands": [
@@ -97,6 +124,20 @@
         {
             "name": "Turn All LEDs On",
             "command": "LED_ALL_ON",
+            "requiredParam": false,
+            "requiredAck": true,
+            "isOTACommand": false
+        },
+        {
+            "name": "Turn LCD Preview On",
+            "command": "LCD_ON",
+            "requiredParam": false,
+            "requiredAck": true,
+            "isOTACommand": false
+        },
+        {
+            "name": "Turn LCD Preview Off",
+            "command": "LCD_OFF",
             "requiredParam": false,
             "requiredAck": true,
             "isOTACommand": false

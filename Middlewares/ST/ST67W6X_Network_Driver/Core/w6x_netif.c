@@ -110,7 +110,18 @@ int32_t W6X_Netif_output(uint32_t link_id, uint8_t *buf, uint32_t len)
     return -1;
   }
 
-  return BusIo_SPI_SendData(type, buf, len, pdMS_TO_TICKS(10000));
+  /* TX credit wait was 10 SECONDS: when the module stalls (rx_stall flow
+   * control), every lwIP sendto() blocked that long — and CRITICALLY this
+   * runs on the caller task while it HOLDS THE LWIP CORE LOCK
+   * (LWIP_TCPIP_CORE_LOCKING=1), so one blocked send convoys MQTT, WSS,
+   * DNS and inbound delivery behind it.  With SPI_TXQ_LEN raised to 32, a
+   * full queue means the module is already seconds behind: fail in 20 ms.
+   * The error propagates as ERR_MEM/ERR_BUF -> errno, the ICE send path
+   * retries briefly and its 3-strike gate absorbs it; RTP loss recovers
+   * via NACK.  NOTE: spi_write() converts ms->ticks itself — pass plain
+   * milliseconds (the old pdMS_TO_TICKS here was a double conversion,
+   * benign only because the tick rate is 1 kHz). */
+  return BusIo_SPI_SendData(type, buf, len, 20);
 }
 
 int32_t W6X_Netif_input(uint32_t link_id, void **buffer, uint8_t **data)

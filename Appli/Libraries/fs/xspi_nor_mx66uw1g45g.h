@@ -34,7 +34,22 @@
  *  1024 Blocks of 64KByte
  *  16 4096 byte Sectors per Block
  */
-#define MX66LM_RESERVED_BLOCKS       ( 64 )
+/* External NOR flash map (XSPI2, memory-mapped at 0x70000000):
+ *   0x0000000  FSBL (signed)
+ *   0x0100000  Application (signed)
+ *   0x0380000  AI model weights (network_data.hex, ~30 MB, ends ~0x2180000)
+ *   0x2200000  littlefs  <-- XPI_START_ADDRESS (certs/keys/config)
+ *
+ * 2026-07-19: littlefs moved from 0x400000 (64 blocks) above the AI weights
+ * region.  The old base sat INSIDE the model weights range: flashing the
+ * model corrupted the filesystem and filesystem writes corrupted the model.
+ * Moving littlefs (rather than the weights) avoids regenerating the model
+ * artifacts, whose absolute addresses are baked in by the ST Edge AI
+ * compiler.  NOTE: changing this value orphans any existing filesystem —
+ * the device must be re-provisioned after flashing a build with a new
+ * value here.  (This is the ACTIVE header — lfs_port_xspi.c/ExtMem; the
+ * ospi_nor_mx25lmxxx45g.* files are dead U5-era code.) */
+#define MX66LM_RESERVED_BLOCKS       ( 544 )    /* 544 x 64K = 0x2200000 */
 #define MX66LM_BLOCK_SZ              ( 64 * 1024 )
 #define MX66LM_SECTOR_SZ             ( 4  * 1024 )
 #define MX66LM_NUM_BLOCKS            ( 1024 )

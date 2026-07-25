@@ -42,6 +42,10 @@
 #define MX25LM_NUM_SECTORS           ( MX25LM_NUM_BLOCKS * MX25LM_SECTORS_PER_BLOCK )
 #define MX25LM_MEM_SZ_BYTES          ( 1024 * MX25LM_BLOCK_SZ )
 
+/* DEAD CODE on STM32N6: this OSPI driver + lfs_port_ospi.c compile out
+ * (HAL_OSPI_MODULE_ENABLED is not defined).  The active NOR port is
+ * lfs_port_xspi.c via the STM32_ExtMem_Manager — the littlefs base and
+ * flash map live in xspi_nor_mx66uw1g45g.h (XPI_START_ADDRESS). */
 #define OPI_START_ADDRESS            ( 10 * MX25LM_BLOCK_SZ )
 
 #define MX25LM_NUM_SECTOR_USABLE     ( 1024 - 10 )

@@ -18,6 +18,7 @@
 #include "app_media_source_port.h"   /* SDK interface                       */
 #include "media_cam.h"
 #include "media_enc.h"
+#include "lcd_preview.h"             /* on-board LCD preview                */
 #include "media_cam_config.h"        /* VENC_*_WIDTH / HEIGHT, CAMERA_FPS   */
 
 #include "stm32n6xx_hal.h"
@@ -83,14 +84,17 @@ static void mp_raw_hex32( uint32_t v )
  * typically repeated patterns or all 0xff / 0x00.                          */
 static void mp_probe_frame_row( const uint8_t * pY )
 {
-    /* 1280 Y-bytes per row; sample row 360 (middle of 720p Y-plane).       */
-    const uint32_t ulRowBytes = 1280U;
-    const uint32_t ulRowY     = 360U;
+    /* 640 Y-bytes per row at 640x480; sample row 240 (frame middle).
+     * (Historic bug: this probe kept the 720p-era 1280-byte stride and
+     * row 360, so it read PAST the 307200-byte Y plane into uninit
+     * PSRAM — the eternal constant 0xAA was never frame data.)          */
+    const uint32_t ulRowBytes = 640U;
+    const uint32_t ulRowY     = 240U;
     const uint32_t ulRowBase  = ulRowY * ulRowBytes;
-    const uint32_t ulCols[ 5 ] = { 0U, 320U, 640U, 960U, 1270U };
+    const uint32_t ulCols[ 5 ] = { 0U, 160U, 320U, 480U, 636U };
     int lI;
 
-    mp_raw_puts( "[M]Y360:" );
+    mp_raw_puts( "[M]Y240:" );
     for( lI = 0; lI < 5; lI++ )
     {
         uint8_t ucY = pY[ ulRowBase + ulCols[ lI ] ];
@@ -143,7 +147,9 @@ typedef struct
     OnFrameReadyToSend_t  pfnOnVideoFrame;
     void *                pvVideoCtx;
     TaskHandle_t          xTaskHandle;
-    volatile uint8_t      ucRunning;
+    volatile uint8_t      ucRunning;      /* media task alive (set once at boot)  */
+    volatile uint8_t      ucStreaming;    /* encode+transmit active (peers present)*/
+    volatile uint8_t      ucForceIdr;     /* force a keyframe on the next encode   */
 
     uint8_t * pucEncodedFrame;
 } MediaPortCtx_t;
@@ -180,6 +186,21 @@ static void prvMediaTask( void * pvParam )
                           ucYPlaneBuf1, ucUVPlaneBuf1,
                           CMW_MODE_CONTINUOUS );
     mp_raw_puts( "[KVSMedia] cam DBL started\r\n" );
+
+    /* PIPE2 (NPU input) rides the same sensor: it can only start once the
+     * camera is actually running — starting it from AI init at boot failed
+     * (sensor idle until a viewer connects) and left the AI task wedged.
+     * No-op unless ENABLE_AI_DETECTION.  Stop is in media_cam.c Stop. */
+    {
+        extern void AiDetection_PipeStart( void );
+
+        /* BISECT (2026-07-20) step 1 RESULT: PIPE2 off -> sessions survive
+         * (160s+, isnd 26ms vs ~1100ms); platform work exonerated, AI path
+         * confirmed as the killer.  Step 2: PIPE2 back ON with inference
+         * skipped in ai_detection.c (AI_BISECT_SKIP_INFERENCE) to split
+         * DCMIPP-PIPE2 traffic from NPU inference bursts. */
+        AiDetection_PipeStart();
+    }
 
     /* Hot-path UART traces removed.  At 115200 baud each byte is ~87us,
      * so the ~120 bytes of per-frame [M]F..topA/B/C/wait/enc/cb/iter-end
@@ -218,40 +239,69 @@ static void prvMediaTask( void * pvParam )
         /* ISP bookkeeping (AE/AWB) — must be called each frame             */
         MediaCam_IspUpdate();
 
-        /* Encode from the completed (stable) NV12 pair.  VENC reads via
-         * its AXI master bypassing the CPU cache — no invalidate needed. */
-        xStageT0 = xTaskGetTickCount();
-        lEncodedLen = MediaEnc_EncodeFrame( xCamFrame.pY,
-                                            xCamFrame.pUV,
-                                            pxCtx->pucEncodedFrame,
-                                            ENCODED_BUF_BYTES,
-                                            0 /* no forced IDR */ );
-        ulEncTicks += ( uint32_t ) ( xTaskGetTickCount() - xStageT0 );
-
-        if( lEncodedLen > 0 )
+        /* Encode + transmit ONLY while a KVS session is active (peers
+         * present).  The camera, the LCD preview (fed from the DCMIPP ISR)
+         * and the AI detection below all run continuously regardless — this
+         * media task is always-on (created in AppMediaSourcePort_Init), so
+         * live preview and detection do not depend on a viewer connecting. */
+        lEncodedLen = 0;
+        if( pxCtx->ucStreaming )
         {
-            SCB_InvalidateDCache_by_Addr( ( uint32_t * ) pxCtx->pucEncodedFrame,
-                                           ( int32_t ) lEncodedLen );
-
-            xFrame.pData        = pxCtx->pucEncodedFrame;
-            xFrame.size         = ( uint32_t ) lEncodedLen;
-            xFrame.timestampUs  = ullTimestampUs;
-            xFrame.trackKind    = TRANSCEIVER_TRACK_KIND_VIDEO;
-            xFrame.freeData     = 0;   /* buffer is static — do not free   */
-
-            if( pxCtx->pfnOnVideoFrame != NULL )
+            int lIntraForce = 0;
+            if( pxCtx->ucForceIdr )
             {
-                xStageT0 = xTaskGetTickCount();
-                ( void ) pxCtx->pfnOnVideoFrame( pxCtx->pvVideoCtx, &xFrame );
-                ulSendTicks += ( uint32_t ) ( xTaskGetTickCount() - xStageT0 );
+                pxCtx->ucForceIdr = 0U;
+                lIntraForce = 1;   /* a viewer just tapped in — send a keyframe */
             }
 
-            ullTimestampUs += ulFramePeriodUs;
+            /* Encode from the completed (stable) NV12 pair.  VENC reads via
+             * its AXI master bypassing the CPU cache — no invalidate needed. */
+            xStageT0 = xTaskGetTickCount();
+            lEncodedLen = MediaEnc_EncodeFrame( xCamFrame.pY,
+                                                xCamFrame.pUV,
+                                                pxCtx->pucEncodedFrame,
+                                                ENCODED_BUF_BYTES,
+                                                lIntraForce );
+            ulEncTicks += ( uint32_t ) ( xTaskGetTickCount() - xStageT0 );
+
+            if( lEncodedLen > 0 )
+            {
+                SCB_InvalidateDCache_by_Addr( ( uint32_t * ) pxCtx->pucEncodedFrame,
+                                               ( int32_t ) lEncodedLen );
+
+                xFrame.pData        = pxCtx->pucEncodedFrame;
+                xFrame.size         = ( uint32_t ) lEncodedLen;
+                xFrame.timestampUs  = ullTimestampUs;
+                xFrame.trackKind    = TRANSCEIVER_TRACK_KIND_VIDEO;
+                xFrame.freeData     = 0;   /* buffer is static — do not free   */
+
+                if( pxCtx->pfnOnVideoFrame != NULL )
+                {
+                    xStageT0 = xTaskGetTickCount();
+                    ( void ) pxCtx->pfnOnVideoFrame( pxCtx->pvVideoCtx, &xFrame );
+                    ulSendTicks += ( uint32_t ) ( xTaskGetTickCount() - xStageT0 );
+                }
+
+                ullTimestampUs += ulFramePeriodUs;
+            }
+            else
+            {
+                LogWarn( "[KVSMedia] H.264 encode failed (ret=%d), skipping frame.",
+                         lEncodedLen );
+            }
         }
-        else
+
+        /* Feed the NPU from this working PIPE1 frame.  The DCMIPP PIPE2 shared
+         * fork is dead on this silicon (delivers only 0xFF), so detection runs
+         * off a CPU-downscale of the same NV12 frame we just encoded.  The
+         * call self-rate-limits to the inference cadence and no-ops while the
+         * NPU is busy, so the downscale (~1-2 ms) runs only ~2x/s — the frame
+         * is still stable here (DCMIPP is writing the other ping-pong buffer). */
         {
-            LogWarn( "[KVSMedia] H.264 encode failed (ret=%d), skipping frame.",
-                     lEncodedLen );
+            extern void AiDetection_SubmitNV12( const uint8_t *, const uint8_t *,
+                                                uint32_t, uint32_t );
+            AiDetection_SubmitNV12( xCamFrame.pY, xCamFrame.pUV,
+                                    VENC_IMX335_WIDTH, VENC_IMX335_HEIGHT );
         }
 
         /* Heartbeat every 30 frames (≈3s @ 10fps): frame#, encoded bytes,
@@ -266,6 +316,7 @@ static void prvMediaTask( void * pvParam )
             mp_raw_puts( " heap=" ); mp_raw_dec( ( int ) xPortGetFreeHeapSize() );
             mp_raw_puts( " hwm=" ); mp_raw_dec( ( int ) uxTaskGetStackHighWaterMark( NULL ) );
             mp_raw_puts( " ovr=" ); mp_raw_dec( ( int ) g_dcmipp_ovr_count );
+            mp_raw_puts( " lur=" ); mp_raw_dec( ( int ) LcdPreview_Underruns() );
             /* Avg ms/frame since last heartbeat: encode stage, send stage,
              * and total frame period (1000/per = actual fps).             */
             {
@@ -297,6 +348,11 @@ static void prvMediaTask( void * pvParam )
         ulFrameNo++;
         ( void ) xLoopStart;   /* pacing is now handled by WaitFrame blocking */
     }
+
+    /* Hide the LCD video layer BEFORE stopping the camera: once capture
+     * stops, the ping-pong buffers freeze/get reused and the panel would
+     * show a stale or torn frame.                                       */
+    LcdPreview_Blank();
 
     /* Stop the DCMIPP camera pipeline + sensor before exiting so the
      * next viewer session finds the pipe in READY state and
@@ -410,12 +466,19 @@ static void prvPsramHex32( uint32_t v )
     mp_raw_puts( buf );
 }
 
+static uint8_t ucPsramReady = 0U;
+
 static void prvPsramInit( void )
 {
     GPIO_InitTypeDef  xGpio  = { 0 };
     XSPIM_CfgTypeDef  xXspim = { 0 };
     uint32_t          ulClk;
     HAL_StatusTypeDef rc;
+
+    if( ucPsramReady != 0U )
+    {
+        return;
+    }
 
     mp_raw_puts( "[PSRAM] init>\r\n" );
 
@@ -460,7 +523,23 @@ static void prvPsramInit( void )
 
     mp_raw_puts( "[PSRAM] gpio OK\r\n" );
 
-    /* ── 3. XSPI1 peripheral init (prescaler = 3 for register config) ── */
+    /* ── 3. XSPI1 kernel clock = HCLK (200 MHz) ────────────────────────
+     * The April "tiny skip-all-MB P-frames" corruption at 200 MHz was a
+     * pad-voltage problem, not timing: VDDIO2 was still in 3V3 range
+     * with HSLV off, so the XSPI1 pads could not toggle above ~64 MHz
+     * cleanly.  FSBL now burns/verifies the HSLV fuse and this init sets
+     * the 1V8 range, same fix that took XSPI2 NOR to 200 MHz DTR.  The
+     * register/timing config below was already the donor's 200 MHz
+     * recipe (RL/WL 7, dummy 6, DQS, DHQC, CSHT 5).                     */
+    {
+        RCC_PeriphCLKInitTypeDef xClk = { 0 };
+        xClk.PeriphClockSelection = RCC_PERIPHCLK_XSPI1;
+        xClk.Xspi1ClockSelection  = RCC_XSPI1CLKSOURCE_HCLK;
+        rc = HAL_RCCEx_PeriphCLKConfig( &xClk );
+        mp_raw_puts( "[PSRAM] kclk->HCLK=" ); prvPsramHex32( rc ); mp_raw_puts( "\r\n" );
+    }
+
+    /* XSPI1 peripheral init (prescaler = 3 for register config) */
     ulClk = HAL_RCCEx_GetPeriphCLKFreq( RCC_PERIPHCLK_XSPI1 );
     mp_raw_puts( "[PSRAM] clkHz=" ); prvPsramHex32( ulClk ); mp_raw_puts( "\r\n" );
 
@@ -520,9 +599,47 @@ static void prvPsramInit( void )
         __DSB();
         uint32_t v = *pTest;
         mp_raw_puts( "[PSRAM] test=" ); prvPsramHex32( v ); mp_raw_puts( "\r\n" );
+
+        /* Bulk smoke-test: the April 200MHz corruption passed the single
+         * word test but broke on sustained transfers.  64KB (> 32KB
+         * D-cache, so reads reach the memory; crosses four 16KB CS
+         * boundaries) with an address-derived pattern.  Safe: nothing in
+         * .psram_bss is valid before this init completes.               */
+        {
+            volatile uint32_t *pBulk = (volatile uint32_t *)0x90000000UL;
+            uint32_t i, ulBad = 0U, ulFirst = 0xFFFFFFFFU, ulGot = 0U;
+            for( i = 0U; i < 16384U; i++ ) { pBulk[i] = ( i * 2654435761U ) ^ 0xA5A5A5A5U; }
+            __DSB();
+            SCB_CleanInvalidateDCache();
+            for( i = 0U; i < 16384U; i++ )
+            {
+                uint32_t w = pBulk[i];
+                if( w != ( ( i * 2654435761U ) ^ 0xA5A5A5A5U ) )
+                {
+                    if( ulBad == 0U ) { ulFirst = i * 4U; ulGot = w; }
+                    ulBad++;
+                }
+            }
+            mp_raw_puts( "[PSRAM] bulk64K bad=" ); prvPsramHex32( ulBad );
+            if( ulBad != 0U )
+            {
+                mp_raw_puts( " first@+" ); prvPsramHex32( ulFirst );
+                mp_raw_puts( " got=" ); prvPsramHex32( ulGot );
+            }
+            mp_raw_puts( "\r\n" );
+        }
     }
 
     mp_raw_puts( "[PSRAM] init<\r\n" );
+    ucPsramReady = 1U;
+}
+
+/* Callable from outside the media source: data now lives in .psram_bss
+ * (xAppContext, AI buffers) that is touched before AppMediaSourcePort_Init
+ * runs, so callers must be able to bring PSRAM up first.  Idempotent. */
+void MediaPort_EnsurePsram( void )
+{
+    prvPsramInit();
 }
 
 /* ── Public AppMediaSourcePort_* API ────────────────────────────────────── */
@@ -537,6 +654,14 @@ int32_t AppMediaSourcePort_Init( void )
      * access to the .psram_bss buffers (frame buffers + VENC allocator).   */
     vPetWatchdog();
     prvPsramInit();
+
+    /* On-board LCD preview (LTDC): needs PSRAM (overlay buffers) and the
+     * scheduler; idempotent, and every LcdPreview_* call no-ops if this
+     * failed.                                                              */
+    vPetWatchdog();
+    mp_raw_puts( "[MP] lcd init>\r\n" );
+    LcdPreview_Init();
+    mp_raw_puts( "[MP] lcd init<\r\n" );
 
     /* Use static PSRAM buffers (placed in .psram_bss by linker)            */
     xMediaCtx.pucEncodedFrame = ucEncodedFrameBuf;
@@ -559,6 +684,24 @@ int32_t AppMediaSourcePort_Init( void )
     vPetWatchdog();
     mp_raw_puts( "[MP] enc init<\r\n" );
 
+    /* Always-on media task: camera capture + LCD preview + AI detection run
+     * continuously from boot.  Encode + KVS transmit are gated on an active
+     * session (ucStreaming, set by AppMediaSourcePort_Start).  This decouples
+     * live preview/detection from whether a viewer is connected. */
+    xMediaCtx.ucRunning   = 1U;
+    xMediaCtx.ucStreaming = 0U;
+    xMediaCtx.ucForceIdr  = 0U;
+    if( xTaskCreate( prvMediaTask,
+                     "KVSMedia",
+                     MEDIA_TASK_STACK_DEPTH,
+                     &xMediaCtx,
+                     MEDIA_TASK_PRIORITY,
+                     &xMediaCtx.xTaskHandle ) != pdPASS )
+    {
+        LogError( "[KVSMedia] Failed to create always-on media task." );
+        return -1;
+    }
+
     mp_raw_puts( "[MP] READY\r\n" );
     return 0;
 }
@@ -571,46 +714,29 @@ int32_t AppMediaSourcePort_Start( OnFrameReadyToSend_t pfnOnVideoFrame,
     ( void ) pfnOnAudioFrame;   /* No audio on this board */
     ( void ) pvAudioCtx;
 
+    /* The media task runs continuously (created in AppMediaSourcePort_Init).
+     * A session start just wires the peer's frame sink and enables the
+     * encode+transmit path; the first encoded frame is forced to a keyframe
+     * so the joining viewer can decode immediately.  Set the sink before
+     * enabling streaming so the task sees a valid callback once ucStreaming. */
     xMediaCtx.pfnOnVideoFrame = pfnOnVideoFrame;
     xMediaCtx.pvVideoCtx      = pvVideoCtx;
-    xMediaCtx.ucRunning       = 1U;
-
-    if( xTaskCreate( prvMediaTask,
-                     "KVSMedia",
-                     MEDIA_TASK_STACK_DEPTH,
-                     &xMediaCtx,
-                     MEDIA_TASK_PRIORITY,
-                     &xMediaCtx.xTaskHandle ) != pdPASS )
-    {
-        LogError( "[KVSMedia] Failed to create media task." );
-        return -1;
-    }
+    xMediaCtx.ucForceIdr      = 1U;
+    xMediaCtx.ucStreaming     = 1U;
 
     return 0;
 }
 
 void AppMediaSourcePort_Stop( void )
 {
-    mp_raw_puts( "[MP] Stop> ucRun=" );
-    mp_raw_dec( ( int ) xMediaCtx.ucRunning );
-    mp_raw_puts( " hdl=" );
-    mp_raw_dec( xMediaCtx.xTaskHandle != NULL );
-    mp_raw_puts( "\r\n" );
-
-    xMediaCtx.ucRunning = 0U;
-
-    /* Wait for the media task to finish its cleanup (MediaCam_Stop) and
-     * self-delete.  WaitFrame has a 2 s timeout, so worst case the task
-     * takes ~2 s + ~1 s (DCMIPP stop timeout) to exit.  Polling at 100 ms
-     * keeps responsiveness without burning CPU.  Without this wait, the
-     * next AppMediaSourcePort_Start() can race: two media tasks touching
-     * the same DCMIPP hardware simultaneously.                            */
-    while( xMediaCtx.xTaskHandle != NULL )
-    {
-        vTaskDelay( pdMS_TO_TICKS( 100 ) );
-    }
-
-    mp_raw_puts( "[MP] Stop<\r\n" );
+    /* Session end: gate off encode+transmit only.  The always-on media task
+     * keeps the camera, LCD preview and AI detection running for the next
+     * viewer — the camera is NOT stopped here anymore.  pfnOnVideoFrame is
+     * left set (harmless; the loop is gated on ucStreaming and overwrites it
+     * on the next start); a single in-flight frame may still be handed to the
+     * closing peer, which the WriteFrame path already tolerates. */
+    xMediaCtx.ucStreaming = 0U;
+    mp_raw_puts( "[MP] Stop (session end; camera/AI/LCD stay on)\r\n" );
 }
 
 void AppMediaSourcePort_Destroy( void )

@@ -49,7 +49,14 @@
 #include "stm32_extmem_type.h"
 
 /* USER CODE BEGIN INCLUDE */
-
+/* Raw-UART (LPUART1, blocking) trace hook for the ExtMem middleware —
+ * implemented in extmem_manager.c and gated there by g_extmem_trace so
+ * the SFDP init sequence is visible on the console but steady-state
+ * littlefs traffic stays quiet.  Level 2 = NOR SFDP init step/error
+ * strings only (SAL level stays 0: its macros need integer formatters). */
+void vExtMemRawDebug(const char *pcStr);
+#define EXTMEM_MACRO_DEBUG(_str_)           vExtMemRawDebug(_str_)
+#define EXTMEM_DRIVER_NOR_SFDP_DEBUG_LEVEL  2
 /* USER CODE END INCLUDE */
 /* Private variables ---------------------------------------------------------*/
 extern XSPI_HandleTypeDef hxspi2;

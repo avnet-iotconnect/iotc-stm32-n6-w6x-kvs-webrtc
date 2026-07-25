@@ -423,6 +423,18 @@ PeerConnectionResult_t PeerConnectionH264Helper_WriteH264Frame( PeerConnectionSe
         {
             packetSent++;
             bytesSent += pRollingBufferPacket->rtpPacket.payloadLength;
+
+            /* Pace intra-frame packet bursts.  A 40-50KB IDR is ~35 RTP
+             * packets; fired back-to-back they overflow the W6X TX queue
+             * and its sendto() WEDGES for seconds (socketMutex timeout,
+             * session collapse - seen 2026-07-20 at ~45s and ~231s into
+             * otherwise healthy sessions).  A 1-tick breather every 4
+             * packets lets the SPI engine drain: ~8ms extra on an IDR,
+             * ~1ms on a normal 7-packet frame. */
+            if( ( packetSent & 0x03U ) == 0U )
+            {
+                vTaskDelay( 1 );
+            }
         }
 
         #if METRIC_PRINT_ENABLED

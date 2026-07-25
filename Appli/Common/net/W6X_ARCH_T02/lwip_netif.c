@@ -35,6 +35,41 @@
 
 /* USER CODE BEGIN Includes */
 
+/* DIAG 2026-07-24 (WAN-UDP-RX localisation, from
+ * _st_bugreport_artifacts/01_diagnostic_patch.c): raw-UART trace of every
+ * inbound IPv4/UDP frame the NCP hands the host, BEFORE any lwIP work.
+ * Bypasses the FreeRTOS logging subsystem (no malloc/mutex/queue) so it
+ * cannot itself drop frames.  Writes to STM32N6 USART1 (the ST-LINK VCP).
+ * Verdict: a [rx] udp line with a PUBLIC src IP during NTP => the NCP now
+ * delivers WAN UDP on V1.3.0 and the drop is in project glue (fixable);
+ * only 192.168.x lines => the NCP still drops WAN UDP on the N6. */
+#define WAN_UDP_RX_DIAG  ( 0 )   /* proven WAN UDP RX works; off so per-packet
+                                  * UART busy-wait can't throttle UDP media */
+#if WAN_UDP_RX_DIAG
+#include <stdint.h>
+extern void vPetWatchdog(void);
+static inline void nrx_putc(char c)
+{
+    for (uint32_t i = 0; i < 600000UL; i++)
+    {
+        if (*(volatile uint32_t *)0x56000C1CUL & (1UL << 7))
+        {
+            *(volatile uint32_t *)0x56000C28UL = (uint32_t)c;
+            return;
+        }
+    }
+    vPetWatchdog();
+}
+static void nrx_puts(const char *s) { while (*s) { nrx_putc(*s++); } }
+static void nrx_dec(uint32_t v)
+{
+    char buf[12]; int n = 0;
+    if (v == 0) { nrx_putc('0'); return; }
+    while (v > 0) { buf[n++] = (char)('0' + (v % 10)); v /= 10; }
+    while (n--) { nrx_putc(buf[n]); }
+}
+#endif /* WAN_UDP_RX_DIAG */
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -178,6 +213,11 @@ err_t net_if_output(struct netif *net_if, struct pbuf *p_buf)
     ret = W6X_Netif_output(link_id, q->payload, q->len);
     if (ret < 0)
     {
+      /* This loop runs on the caller task UNDER THE LWIP CORE LOCK.
+       * On the first failed segment, stop: the rest of the frame is a
+       * torn packet on the wire, and each further attempt burns another
+       * full enqueue timeout while every other socket convoys behind
+       * the lock. (2026-07-20 W6X TX-stall deep dive) */
       LogError("%s: spi_write ERROR : %d\n", __func__, ret);
       switch (ret)
       {
@@ -200,6 +240,8 @@ err_t net_if_output(struct netif *net_if, struct pbuf *p_buf)
           status = ERR_VAL;
           break;
       }
+
+      break;   /* abandon the rest of the frame — see comment above */
     }
   }
 
@@ -279,6 +321,32 @@ static int32_t netif_rx_process(uint32_t link_id)
     return ret;
   }
 
+#if WAN_UDP_RX_DIAG
+  /* First host-side sight of the frame after the NCP SPI RX queue.  Trace
+   * every inbound IPv4/UDP src IP so NTP time reveals whether WAN UDP now
+   * arrives (public src) or is still dropped (only 192.168.x). */
+  if ((ret >= 42) && (payload != NULL) &&
+      (payload[12] == 0x08U) && (payload[13] == 0x00U) &&
+      ((payload[14] & 0xF0U) == 0x40U))
+  {
+    uint8_t ihl_bytes = (uint8_t)((payload[14] & 0x0FU) * 4U);
+    if ((payload[23] == 17U) &&
+        ((uint32_t)(14U + ihl_bytes + 8U) <= (uint32_t)ret))
+    {
+      uint32_t tport = 14U + ihl_bytes;
+      uint16_t sp = (uint16_t)(((uint16_t)payload[tport] << 8) | payload[tport + 1U]);
+      uint16_t dp = (uint16_t)(((uint16_t)payload[tport + 2U] << 8) | payload[tport + 3U]);
+      nrx_puts("[rx] udp src=");
+      nrx_dec(payload[26]); nrx_putc('.'); nrx_dec(payload[27]); nrx_putc('.');
+      nrx_dec(payload[28]); nrx_putc('.'); nrx_dec(payload[29]);
+      nrx_puts(" sp="); nrx_dec(sp);
+      nrx_puts(" dp="); nrx_dec(dp);
+      nrx_puts(" b=");  nrx_dec((uint32_t)ret);
+      nrx_puts("\r\n");
+    }
+  }
+#endif /* WAN_UDP_RX_DIAG */
+
   /* Allocate new pbuf custom element */
   struct pbuf_custom *pbufc = netif_pbuf_alloc(buffer);
   if (pbufc == NULL)
@@ -294,7 +362,10 @@ static int32_t netif_rx_process(uint32_t link_id)
   if (pb == NULL)
   {
     LogError("Memory allocation failure\n");
+    /* Free BOTH the driver buffer and the wrapper (was leaking the
+     * netif_pbuf_t container). */
     (void)W6X_Netif_free(buffer);
+    vPortFree(CONTAINER_OF(pbufc, netif_pbuf_t, pb));
     vTaskDelay(pdMS_TO_TICKS(100));
     return -1;
   }
@@ -302,8 +373,23 @@ static int32_t netif_rx_process(uint32_t link_id)
   /* Call the upper layer callback */
   if (netif_cur->input(pb, netif_cur))
   {
-    LogError("Input ERROR\n");
-    (void)W6X_Netif_free(buffer);
+    /* HEAP-CORRUPTION FIX (2026-07-20): this path used to call BOTH
+     * W6X_Netif_free(buffer) AND netif_pbuf_free(pb) — but
+     * netif_pbuf_free() already frees netif_pbuf->buffer, i.e. the SAME
+     * pointer, so every inbound overflow during a TX stall double-freed
+     * a heap block.  Random later crashes / wedges (the 11 s – 231 s
+     * session-lifetime lottery) were the downstream damage.  Probe: count
+     * and report with heap level, rate-limited. */
+    {
+      static uint32_t ulInputErrs = 0U;
+      ulInputErrs++;
+      if( ( ulInputErrs & 0x07U ) == 1U )
+      {
+        LogError( "[IE] input drop n=%lu heap=%u",
+                  ( unsigned long ) ulInputErrs,
+                  ( unsigned ) xPortGetFreeHeapSize() );
+      }
+    }
     netif_pbuf_free(pb);
     return -1;
   }

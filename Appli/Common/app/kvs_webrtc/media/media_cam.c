@@ -13,6 +13,8 @@
 #include "media_cam.h"
 #include "media_cam_config.h"   /* sensor / venc dimension macros          */
 #include "cmw_camera.h"
+#include "../../ai/ai_detection.h"
+#include "lcd_preview.h"         /* LTDC layer flip from the frame ISR      */
 #include "isp_core.h"            /* ISP_SensorInfoTypeDef                   */
 #include "FreeRTOS.h"            /* vPetWatchdog() declared in FreeRTOSConfig.h */
 #include "task.h"                /* vTaskDelay for post-start poll loop     */
@@ -159,6 +161,9 @@ static void prvDCMIPP_PipeInitEncoder( int lSensorW, int lSensorH )
     ret = CMW_CAMERA_SetPipeConfig( DCMIPP_PIPE1, &xConf, &ulPitch );
     assert( ret == HAL_OK );
     assert( ulPitch == ( uint32_t )( xConf.output_width * xConf.output_bpp ) );
+
+    /* PIPE2 -> NPU model input (no-op unless ENABLE_AI_DETECTION). */
+    AiDetection_PipeInit( lSensorW, lSensorH );
 }
 
 static void prvDCMIPP_IpPlugInit( DCMIPP_HandleTypeDef * pxHdcmipp )
@@ -193,21 +198,62 @@ static void prvDCMIPP_IpPlugInit( DCMIPP_HandleTypeDef * pxHdcmipp )
      * network stack while still allowing enough DCMIPP throughput.       */
     xIpPlugConf.MemoryPageSize = DCMIPP_MEMORY_PAGE_SIZE_256BYTES;
 
-    xIpPlugConf.Client                     = DCMIPP_CLIENT2;
+    /* REPARTITION (2026-07-20): with PIPE2 live, the old two-client split
+     * was backwards for this workload.  Per RM0486 the IPPLUG clients are
+     * Client1=Pipe0, Client2=Pipe1 main plane (our NV12 Y), Client3=Pipe1
+     * second plane (our UV), Client5=Pipe2 — so the old config gave the
+     * NN pipe (CLIENT5) a 4.5KB FIFO and 15/16 arbitration weight while
+     * PIPE1-Y (CLIENT2) had a one-line FIFO at 1/16 weight and PIPE1-UV
+     * (CLIENT3) was never configured.  Symptom: the moment PIPE2 started,
+     * PIPE1 frames became changing garbage (8-9KB P-frames of noise, Y
+     * probe blind to it) and sessions collapsed.  Now every client gets
+     * an explicit non-overlapping slice (>=2 lines: Y/UV lines are 640B,
+     * PIPE2 RGB888 line is 672B; DPREG unit is 8 bytes, 1024 total) and
+     * PIPE1's planes outweigh PIPE2.  BURST_64 kept everywhere — see the
+     * PSRAM note above. */
+
+    xIpPlugConf.Client                     = DCMIPP_CLIENT1;   /* Pipe0: unused */
     xIpPlugConf.Traffic                    = DCMIPP_TRAFFIC_BURST_SIZE_64BYTES;
     xIpPlugConf.MaxOutstandingTransactions = DCMIPP_OUTSTANDING_TRANSACTION_NONE;
     xIpPlugConf.DPREGStart                 = 0;
-    xIpPlugConf.DPREGEnd                   = 79;
+    xIpPlugConf.DPREGEnd                   = 31;
     xIpPlugConf.WLRURatio                  = 0;
     ret = HAL_DCMIPP_SetIPPlugConfig( pxHdcmipp, &xIpPlugConf );
     assert( ret == HAL_OK );
 
-    xIpPlugConf.Client                     = DCMIPP_CLIENT5;
+    xIpPlugConf.Client                     = DCMIPP_CLIENT2;   /* Pipe1 Y: 2560B = 4 lines */
     xIpPlugConf.Traffic                    = DCMIPP_TRAFFIC_BURST_SIZE_64BYTES;
     xIpPlugConf.MaxOutstandingTransactions = DCMIPP_OUTSTANDING_TRANSACTION_2;
-    xIpPlugConf.DPREGStart                 = 80;
-    xIpPlugConf.DPREGEnd                   = 639;
+    xIpPlugConf.DPREGStart                 = 32;
+    xIpPlugConf.DPREGEnd                   = 351;
     xIpPlugConf.WLRURatio                  = 15;
+    ret = HAL_DCMIPP_SetIPPlugConfig( pxHdcmipp, &xIpPlugConf );
+    assert( ret == HAL_OK );
+
+    xIpPlugConf.Client                     = DCMIPP_CLIENT3;   /* Pipe1 UV: 2048B = 3 lines */
+    xIpPlugConf.Traffic                    = DCMIPP_TRAFFIC_BURST_SIZE_64BYTES;
+    xIpPlugConf.MaxOutstandingTransactions = DCMIPP_OUTSTANDING_TRANSACTION_2;
+    xIpPlugConf.DPREGStart                 = 352;
+    xIpPlugConf.DPREGEnd                   = 607;
+    xIpPlugConf.WLRURatio                  = 7;
+    ret = HAL_DCMIPP_SetIPPlugConfig( pxHdcmipp, &xIpPlugConf );
+    assert( ret == HAL_OK );
+
+    xIpPlugConf.Client                     = DCMIPP_CLIENT4;   /* Pipe1 3rd plane: unused */
+    xIpPlugConf.Traffic                    = DCMIPP_TRAFFIC_BURST_SIZE_64BYTES;
+    xIpPlugConf.MaxOutstandingTransactions = DCMIPP_OUTSTANDING_TRANSACTION_NONE;
+    xIpPlugConf.DPREGStart                 = 608;
+    xIpPlugConf.DPREGEnd                   = 671;
+    xIpPlugConf.WLRURatio                  = 0;
+    ret = HAL_DCMIPP_SetIPPlugConfig( pxHdcmipp, &xIpPlugConf );
+    assert( ret == HAL_OK );
+
+    xIpPlugConf.Client                     = DCMIPP_CLIENT5;   /* Pipe2 NN: 2816B = 4 lines */
+    xIpPlugConf.Traffic                    = DCMIPP_TRAFFIC_BURST_SIZE_64BYTES;
+    xIpPlugConf.MaxOutstandingTransactions = DCMIPP_OUTSTANDING_TRANSACTION_NONE;
+    xIpPlugConf.DPREGStart                 = 672;
+    xIpPlugConf.DPREGEnd                   = 1023;
+    xIpPlugConf.WLRURatio                  = 1;
     ret = HAL_DCMIPP_SetIPPlugConfig( pxHdcmipp, &xIpPlugConf );
     assert( ret == HAL_OK );
 }
@@ -336,8 +382,10 @@ void MediaCam_StartDouble( uint8_t * pY0, uint8_t * pUV0,
                            uint32_t  ulCamMode )
 {
     DCMIPP_HandleTypeDef * pxHdcmipp = CMW_CAMERA_GetDCMIPPHandle();
+#if ( CAPTURE_SEMIPLANAR == 1 )
     DCMIPP_SemiPlanarDstAddressTypeDef xAddr0;
     DCMIPP_SemiPlanarDstAddressTypeDef xAddr1;
+#endif
     int ret;
 
     assert( pY0 != NULL && pUV0 != NULL && pY1 != NULL && pUV1 != NULL );
@@ -357,6 +405,7 @@ void MediaCam_StartDouble( uint8_t * pY0, uint8_t * pUV0,
     pucPingPongUV[ 1 ] = pUV1;
     ulFrameEventCount  = 0;
 
+#if ( CAPTURE_SEMIPLANAR == 1 )
     /* Configure RGB→YUV color conversion on PIPE1 so the pixel packer can
      * emit YUV420_2 (NV12).  The CMW middleware only wires this up for the
      * YUV422_1 format; for the semi-planar format we must program the
@@ -379,6 +428,12 @@ void MediaCam_StartDouble( uint8_t * pY0, uint8_t * pUV0,
         ret = HAL_DCMIPP_PIPE_EnableYUVConversion( pxHdcmipp, DCMIPP_PIPE1 );
         assert( ret == HAL_OK );
     }
+#else
+    /* YUV422_1 (single-plane) proving path: the CMW middleware already
+     * programmed + enabled the RGB→YUV matrix inside CMW_CAMERA_SetPipeConfig
+     * (cmw_camera.c YUV422_1 branch), so nothing to do here. */
+    ( void ) pxHdcmipp;
+#endif
 
     /* Print HAL state before DBM start so we can see whether the pipe is
      * READY (the HAL precondition) or stuck in BUSY/ERROR.                  */
@@ -403,6 +458,7 @@ void MediaCam_StartDouble( uint8_t * pY0, uint8_t * pUV0,
         raw_puts( "\r\n" );
     }
 
+#if ( CAPTURE_SEMIPLANAR == 1 )
     /* Assemble the semi-planar DBM address pairs.  DCMIPP checks 16-byte
      * alignment of both Y and UV addresses in the HAL start routine.        */
     xAddr0.YAddress  = ( uint32_t ) pY0;
@@ -422,6 +478,24 @@ void MediaCam_StartDouble( uint8_t * pY0, uint8_t * pUV0,
               &xAddr0, &xAddr1, ulCamMode );
     raw_puts( "[CAM] DBL SP start<r=" ); raw_dec( ( uint32_t ) ret ); raw_puts( "\r\n" );
     assert( ret == HAL_OK );
+#else
+    /* EXACT-DONOR PROVING PATH 2026-07-23: single-plane already proven NOT
+     * to feed PIPE2 (still 0xFF).  Last topology delta vs the working donor
+     * is DBM: donor PIPE1 is SINGLE-BUFFER (HAL_DCMIPP_CSI_PIPE_Start, no
+     * DBM bit); ours used DoubleBufferStart.  Replicate the donor exactly —
+     * single-buffer, single-plane — to close the PIPE1-topology hypothesis.
+     * Only pY0 is written (no ping-pong flip), so the stream tears/garbles;
+     * irrelevant, the verdict is the [AI] in-stats line.                    */
+    ( void ) pUV0;
+    ( void ) pUV1;
+    ( void ) pY1;
+    raw_puts( "[CAM] SB 1P start>\r\n" );
+    ret = HAL_DCMIPP_CSI_PIPE_Start(
+              pxHdcmipp, DCMIPP_PIPE1, DCMIPP_VIRTUAL_CHANNEL0,
+              ( uint32_t ) pY0, ulCamMode );
+    raw_puts( "[CAM] SB 1P start<r=" ); raw_dec( ( uint32_t ) ret ); raw_puts( "\r\n" );
+    assert( ret == HAL_OK );
+#endif
 
     /* The semi-planar HAL start enables the DCMIPP capture but does NOT
      * start the sensor.  CMW_CAMERA_DoubleBufferStart normally calls
@@ -622,6 +696,9 @@ void MediaCam_Stop( void )
 {
     DCMIPP_HandleTypeDef * pxH = CMW_CAMERA_GetDCMIPPHandle();
     HAL_StatusTypeDef      rc;
+
+    /* Stop the NPU input pipe first (no-op unless ENABLE_AI_DETECTION). */
+    AiDetection_PipeStop();
 
     raw_puts( "[CAM] Stop>\r\n" );
 
@@ -923,11 +1000,25 @@ HAL_StatusTypeDef MX_DCMIPP_ClockConfig( DCMIPP_HandleTypeDef * pxHdcmipp )
  * and worsening AXI contention that likely precipitated DCMIPP OVR events. */
 int CMW_CAMERA_PIPE_FrameEventCallback( uint32_t ulPipe )
 {
+    if( ulPipe == DCMIPP_PIPE2 )
+    {
+        /* NPU model-input pipe (no-op unless ENABLE_AI_DETECTION). */
+        AiDetection_FrameDoneISR();
+    }
+
     if( ( ulPipe == DCMIPP_PIPE1 ) && ( xFrameReadySem != NULL ) )
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        uint32_t   ulDoneIdx;
 
         ulFrameEventCount++;
+
+        /* LCD preview: point LTDC Layer 1 at the just-completed ping-pong
+         * slot (same index math as MediaCam_WaitFrame).  Register writes
+         * only; latches at the panel's next vertical blanking.            */
+        ulDoneIdx = ( ulFrameEventCount - 1U ) & 1U;
+        LcdPreview_ShowFrameISR( pucPingPongY[ ulDoneIdx ],
+                                 pucPingPongUV[ ulDoneIdx ] );
 
         /* Giving a binary sem that is already "available" is a no-op and
          * does not stack — if the media task is slow and we miss events,

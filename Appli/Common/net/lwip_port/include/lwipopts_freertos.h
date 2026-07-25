@@ -37,15 +37,24 @@
 
 /* tcpip_thread should run on HIGH priority */
 #define TCPIP_THREAD_NAME             "lwIP"
-#define TCPIP_THREAD_STACKSIZE        ( 512  )
-#define TCPIP_THREAD_PRIO             25
+/* 512 -> 1024 words, prio 25 -> 45, mbox 16 -> 64 (2026-07-20 W6X stall
+ * deep dive): the netif RX producer runs at 50 while tcpip consumed at
+ * 25 — during core-lock convoys the 16-slot input mbox overflowed at
+ * ~100 inbound pkt/s (STUN/RTCP/NACK), dropping packets AND (pre-fix)
+ * triggering the lwip_netif input-error double-free.  45 keeps tcpip
+ * below the bus servicers (50/53/54) but above every app task. */
+#define TCPIP_THREAD_STACKSIZE        ( 1024 )
+#define TCPIP_THREAD_PRIO             45
 
 
-#define TCPIP_MBOX_SIZE               16
+#define TCPIP_MBOX_SIZE               64
 #define DEFAULT_RAW_RECVMBOX_SIZE     16
 #define DEFAULT_UDP_RECVMBOX_SIZE     16
 #define DEFAULT_TCP_RECVMBOX_SIZE     16
 #define DEFAULT_ACCEPTMBOX_SIZE       16
+
+/* Input-message pool must cover the mbox depth (default 8 in opt.h). */
+#define MEMP_NUM_TCPIP_MSG_INPKT      64
 
 /*fix http IOT issue */
 #define LWIP_WND_SCALE                1

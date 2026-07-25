@@ -24,6 +24,7 @@
 #include "../../sys/interrupt_handlers.h"
 #include "../mqtt/mqtt_agent_task.h"
 #include "../mqtt/subscription_manager.h"
+#include "../ai/ai_detection.h"
 #include "iotconnect_runtime.h"
 #include "vendor/iotcl.h"
 #include "vendor/iotcl_c2d.h"
@@ -43,6 +44,11 @@
 #define IOTCONNECT_HTTP_TIMEOUT_RETRIES          ( 3U )
 #define IOTCONNECT_EVENT_QUEUE_LENGTH            ( 8U )
 #define IOTCONNECT_DEMO_POLL_INTERVAL_MS         ( 200U )
+/* Heartbeat publish so live values (LED/button state + NPU ai_people/
+ * ai_top_conf/ai_infer_ms) reach IOTCONNECT continuously — without this the
+ * demo task only published on a C2D command or a button press, so the boot
+ * telemetry (ai_people=0, before the camera ran) was the only sample seen. */
+#define IOTCONNECT_DEMO_PUBLISH_PERIOD_MS        ( 5000U )
 #define IOTCONNECT_SAMPLE_PERIOD_MS              ( 5000U )
 #define IOTCONNECT_ACK_MESSAGE_MAX_LEN           ( 96U )
 #define IOTCONNECT_TOPIC_BUFFER_LEN              ( 256U )
@@ -1453,6 +1459,21 @@ static BaseType_t prvPublishDemoTelemetry( void )
     ( void ) iotcl_telemetry_set_bool( xMessage, "led_green", xIoTConnectRuntime.xLedGreenOn == pdTRUE );
     ( void ) iotcl_telemetry_set_bool( xMessage, "button_user", xIoTConnectRuntime.xButtonPressed == pdTRUE );
 
+    /* Phase 3: NPU people-detection stats (only once the network is up;
+     * no-ops in non-AI builds).  The platform template needs matching
+     * NUMBER attributes: ai_people, ai_top_conf, ai_infer_ms.           */
+    {
+        int32_t lDetections = 0;
+        uint32_t ulTopConfPct = 0U, ulInferMs = 0U;
+
+        if( AiDetection_GetTelemetry( &lDetections, &ulTopConfPct, &ulInferMs, NULL ) != 0U )
+        {
+            ( void ) iotcl_telemetry_set_number( xMessage, "ai_people", ( double ) lDetections );
+            ( void ) iotcl_telemetry_set_number( xMessage, "ai_top_conf", ( double ) ulTopConfPct );
+            ( void ) iotcl_telemetry_set_number( xMessage, "ai_infer_ms", ( double ) ulInferMs );
+        }
+    }
+
     if( iotcl_mqtt_send_telemetry( xMessage, false ) == IOTCL_SUCCESS )
     {
         xStatus = pdTRUE;
@@ -1585,17 +1606,64 @@ static BaseType_t prvParseDemoLedCommand( const char * pcCommand,
     return pdTRUE;
 }
 
+/* IoTConnect dashboard WebRTC controls arrive on the command topic as these
+ * event types ("ct").  They carry no "cmd" field. */
+#define IOTCONNECT_CT_START_VIDEO    ( 112 )
+#define IOTCONNECT_CT_STOP_VIDEO     ( 113 )
+
 static void prvDemoCommandCallback( IotclC2dEventData xEventData )
 {
-    const char * pcCommand = iotcl_c2d_get_command( xEventData );
+    const int lType = iotcl_c2d_get_event_type( xEventData );
     const char * pcAckId = iotcl_c2d_get_ack_id( xEventData );
+    const char * pcCommand;
     IoTConnectQueuedEvent_t xEvent = { 0 };
+
+    /* ct=112/113 are the dashboard "Start Video"/"Stop Video" signals.  They
+     * carry no "cmd" field, and KVS streaming is already driven by the viewer's
+     * signaling connection, so acknowledge them instead of treating them as a
+     * malformed command (which spammed an error and NAKed the dashboard). */
+    if( ( lType == IOTCONNECT_CT_START_VIDEO ) || ( lType == IOTCONNECT_CT_STOP_VIDEO ) )
+    {
+        LogInfo( ( "IoTConnect %s Video request (ct=%d)",
+                   ( lType == IOTCONNECT_CT_START_VIDEO ) ? "Start" : "Stop",
+                   lType ) );
+        if( pcAckId != NULL )
+        {
+            prvQueueCmdAckEvent( pcAckId,
+                                 IOTCL_C2D_EVT_CMD_SUCCESS_WITH_ACK,
+                                 "OK" );
+        }
+        return;
+    }
+
+    pcCommand = iotcl_c2d_get_command( xEventData );
 
     if( pcCommand == NULL )
     {
         prvQueueCmdAckEvent( pcAckId,
                              IOTCL_C2D_EVT_CMD_FAILED,
                              "Invalid command payload" );
+        return;
+    }
+
+    /* LCD preview on/off (default ON at powerup).  Independent of KVS: the
+     * camera and AI detection run continuously; this only toggles what the
+     * on-board panel displays. */
+    if( ( strcmp( pcCommand, "LCD_ON" ) == 0 ) ||
+        ( strcmp( pcCommand, "LCD_OFF" ) == 0 ) )
+    {
+        extern void LcdPreview_SetEnabled( uint8_t ucEnable );
+        uint8_t ucOn = ( strcmp( pcCommand, "LCD_ON" ) == 0 ) ? 1U : 0U;
+
+        LcdPreview_SetEnabled( ucOn );
+        LogInfo( ( "LCD preview %s", ucOn ? "ON" : "OFF" ) );
+
+        if( pcAckId != NULL )
+        {
+            prvQueueCmdAckEvent( pcAckId,
+                                 IOTCL_C2D_EVT_CMD_SUCCESS_WITH_ACK,
+                                 "OK" );
+        }
         return;
     }
 
@@ -1741,6 +1809,8 @@ static void vIoTConnectDemoTask( void * pvParameters )
     ( void ) xEventGroupSetBits( xIoTConnectRuntime.xButtonEvents,
                                  IOTCONNECT_DEMO_BUTTON_EVENT );
 
+    TickType_t xLastPublish = xTaskGetTickCount();
+
     for( ;; )
     {
         if( xQueueReceive( xIoTConnectRuntime.xEventQueue,
@@ -1760,10 +1830,20 @@ static void vIoTConnectDemoTask( void * pvParameters )
             xPublishTelemetry = pdTRUE;
         }
 
+        /* Heartbeat: publish on a fixed period so live NPU detection stats
+         * (and LED/button state) stream to IOTCONNECT even with no command
+         * or button activity. */
+        if( ( xTaskGetTickCount() - xLastPublish ) >=
+            pdMS_TO_TICKS( IOTCONNECT_DEMO_PUBLISH_PERIOD_MS ) )
+        {
+            xPublishTelemetry = pdTRUE;
+        }
+
         if( xPublishTelemetry == pdTRUE )
         {
             ( void ) prvPublishDemoTelemetry();
             xPublishTelemetry = pdFALSE;
+            xLastPublish      = xTaskGetTickCount();
         }
     }
 }

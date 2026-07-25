@@ -109,6 +109,58 @@ int main(void)
     char buf[80];
     static const char hex[] = "0123456789ABCDEF";
 
+    /* HSLV OTP fuse (word 124: bit15=VDDIO3/XSPI2-NOR, bit16=VDDIO2/
+     * XSPI1-PSRAM) is the hardware permission for 1.8V-range high-speed
+     * pads, and SVMCR VRSEL must then select the 1.8V range.  Every ST
+     * N6570-DK example programs this fuse on first boot (donor
+     * app_fuseprogramming.c); without fuse+VRSEL the XSPI pads run in
+     * 3.3V-range mode — fine at <=64 MHz, broken at speed (matches the
+     * XSPI1 PSRAM 200 MHz corruption and the XSPI2 octal-DTR bus stall).
+     * Idempotent: reads first, programs only missing bits.  Both rails
+     * are hard-wired 1.8V on this board (BSP sets 1V8 unconditionally). */
+    {
+      BSEC_HandleTypeDef hbsec;
+      const uint32_t ulHslvMask = (1UL << 15) | (1UL << 16);
+      uint32_t ulFuse = 0;
+
+      __HAL_RCC_BSEC_CLK_ENABLE();
+      hbsec.Instance = BSEC;
+
+      if (HAL_BSEC_OTP_Read(&hbsec, 124U, &ulFuse) != HAL_OK)
+      {
+        msg = "[FSBL] HSLV fuse read FAILED\r\n";
+        HAL_UART_Transmit(&hlpuart1, (const uint8_t *)msg, strlen(msg), 500);
+      }
+      else if ((ulFuse & ulHslvMask) == ulHslvMask)
+      {
+        msg = "[FSBL] HSLV fuses already set\r\n";
+        HAL_UART_Transmit(&hlpuart1, (const uint8_t *)msg, strlen(msg), 500);
+      }
+      else
+      {
+        msg = "[FSBL] programming HSLV fuses...\r\n";
+        HAL_UART_Transmit(&hlpuart1, (const uint8_t *)msg, strlen(msg), 500);
+
+        if ((HAL_BSEC_OTP_Program(&hbsec, 124U, ulFuse | ulHslvMask,
+                                  HAL_BSEC_NORMAL_PROG) == HAL_OK) &&
+            (HAL_BSEC_OTP_Read(&hbsec, 124U, &ulFuse) == HAL_OK) &&
+            ((ulFuse & ulHslvMask) == ulHslvMask))
+        {
+          msg = "[FSBL] HSLV fuses programmed OK\r\n";
+        }
+        else
+        {
+          /* Not fatal here: the app verifies the octal NOR link and falls
+           * back to 1-line if the pads can't do 200 MHz. */
+          msg = "[FSBL] HSLV fuse program FAILED\r\n";
+        }
+        HAL_UART_Transmit(&hlpuart1, (const uint8_t *)msg, strlen(msg), 500);
+      }
+
+      HAL_PWREx_ConfigVddIORange(PWR_VDDIO2, PWR_VDDIO_RANGE_1V8);
+      HAL_PWREx_ConfigVddIORange(PWR_VDDIO3, PWR_VDDIO_RANGE_1V8);
+    }
+
     msg = "\r\n[FSBL] booting app...\r\n";
     HAL_UART_Transmit(&hlpuart1, (const uint8_t *)msg, strlen(msg), 500);
 
@@ -303,10 +355,15 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.IC1Selection.ClockDivider = 2;
   RCC_ClkInitStruct.IC2Selection.ClockSelection = RCC_ICCLKSOURCE_PLL1;
   RCC_ClkInitStruct.IC2Selection.ClockDivider = 4;
+  /* NPU (IC6) 1600/2 = 800 MHz, NPU RAMs (IC11) 1600/4 = 400 MHz — was
+   * 400/200.  The donor (x-cube-n6-ai-h264-usb-uvc) runs 1000/900 off
+   * dedicated PLL2/PLL3; 800/400 off the shared PLL1 halves inference
+   * compute time without adding a PLL.  VOS scale 0 + SMPS overdrive are
+   * already set above, which is what these speeds require. */
   RCC_ClkInitStruct.IC6Selection.ClockSelection = RCC_ICCLKSOURCE_PLL1;
-  RCC_ClkInitStruct.IC6Selection.ClockDivider = 4;
+  RCC_ClkInitStruct.IC6Selection.ClockDivider = 2;
   RCC_ClkInitStruct.IC11Selection.ClockSelection = RCC_ICCLKSOURCE_PLL1;
-  RCC_ClkInitStruct.IC11Selection.ClockDivider = 8;
+  RCC_ClkInitStruct.IC11Selection.ClockDivider = 4;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct) != HAL_OK)
   {

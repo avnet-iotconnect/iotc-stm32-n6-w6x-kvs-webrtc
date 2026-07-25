@@ -47,8 +47,13 @@
  * 500 kbps cap averages 7-10 KB/frame × 15 fps ≈ 120-150 kbps with
  * occasional I-frame spikes, so 250 kbps of retransmit history is still
  * more than adequate.                                                        */
-#define TRANSCEIVER_H264_VIDEO_BIT_RATE ( 250 * 1024 )
-#define TRANSCEIVER_H265_VIDEO_BIT_RATE ( 250 * 1024 )
+/* 2026-07-20: raised 250k -> 768k.  At 250k the video rolling buffer held
+ * only 26 packets (~0.25 s of the real ~1 Mbps stream): a single lost RTP
+ * packet aged out before the viewer's NACK arrived, retransmission failed
+ * ("Fail to retrieve RTP packet sequence number ... result: 5"), and the
+ * browser froze on the gap.  768k ~= 80 packets ~= 0.6 s, ~+64 KB heap. */
+#define TRANSCEIVER_H264_VIDEO_BIT_RATE ( 768 * 1024 )
+#define TRANSCEIVER_H265_VIDEO_BIT_RATE ( 768 * 1024 )
 
 /* Audio bitrate for rolling-buffer sizing.  We don't transmit audio on this
  * board so only the metadata array (12 B × capacity) is allocated — the

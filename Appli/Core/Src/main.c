@@ -119,18 +119,12 @@ int main(void)
   MX_XSPI2_Deinit();
   /* USER CODE END SysInit */
 
-  /* PeriphCommonClock_Config() (XSPI1=HCLK=200MHz) DISABLED.
-   * At 200MHz the PSRAM shows data-integrity issues in sustained bulk
-   * transfers: DCMIPP writes frame N to PSRAM, VENC reads it back, but
-   * the encoder sees "no-change" content (tiny skip-all-MB P-frames of
-   * 37-48 bytes) and eventually hangs waiting on its IRQ at frame ~4.
-   * The 32-bit DEADBEEF smoke-test passed but bulk 720p ARGB8888 frames
-   * apparently don't.  Leaving XSPI1 at the FSBL-default (HSI=64MHz)
-   * gives lower bandwidth but stable reads — user saw a real ceiling-fan
-   * image with this config before it was "upgraded".
-   *
-   * TODO: revisit 200MHz later with different MR0/DummyCycles timing,
-   * or add DelayBlockBypass/SampleShifting calibration.                 */
+  /* PeriphCommonClock_Config() stays DISABLED (it also carries a TIM
+   * prescaler change never validated here).  The XSPI1=HCLK=200MHz
+   * switch it contained now lives in prvPsramInit (stm32_media_port.c):
+   * the April 200MHz "skip-all-MB P-frames" corruption was VDDIO2 still
+   * in 3V3 range / HSLV off, fixed by the FSBL HSLV fuse + 1V8 range
+   * work that also took XSPI2 NOR to 200MHz DTR.                        */
   /* PeriphCommonClock_Config(); */
 
   /* Initialize all configured peripherals */
@@ -140,6 +134,23 @@ int main(void)
   MX_SPI5_Init();
   MX_TIM5_Init();
   MX_RNG_Init();
+  /* XSPI2 kernel clock = HCLK = 200 MHz (default: HSI 64 MHz) — the NOR
+   * holds the 30 MB AI model weights, streamed through the memory-mapped
+   * window by the NPU on EVERY inference; at 64 MHz the weight fetch
+   * dominates (~1.75 s/inference measured).  Must precede MX_XSPI2_Init
+   * and MX_EXTMEM_MANAGER_Init, which derive prescalers from this clock.
+   * littlefs shares the bus and just gets faster.  (PeriphCommonClock_
+   * Config is deliberately disabled — see comment above — so this is
+   * done inline, mirroring the XSPI1/PSRAM bump in stm32_media_port.c.) */
+  {
+    RCC_PeriphCLKInitTypeDef xXspi2Clk = {0};
+    xXspi2Clk.PeriphClockSelection = RCC_PERIPHCLK_XSPI2;
+    xXspi2Clk.Xspi2ClockSelection  = RCC_XSPI2CLKSOURCE_HCLK;
+    if (HAL_RCCEx_PeriphCLKConfig(&xXspi2Clk) != HAL_OK)
+    {
+      Error_Handler();
+    }
+  }
   MX_XSPI2_Init();
   MX_IWDG_Init();
   MX_USART2_UART_Init();
@@ -192,6 +203,7 @@ void PeriphCommonClock_Config(void)
   {
     Error_Handler();
   }
+
 }
 
 /**

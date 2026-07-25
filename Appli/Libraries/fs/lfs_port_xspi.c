@@ -34,6 +34,8 @@
 #include "FreeRTOS.h"
 #include "semphr.h"
 
+#include <string.h>
+
 #include "lfs_util.h"
 #include "lfs.h"
 #include "lfs_port_prv.h"
@@ -43,6 +45,82 @@
 /*
  * LittleFS port for the external NOR flash connected to the STM32U5 octo-spi interface
  */
+
+/* ── NOR memory-mapped window management ─────────────────────────────────
+ * Steady state is MEMORY-MAPPED (XSPI2 FMODE=3) so that the CPU and the
+ * NPU can read the AI model weights at 0x70380000 through the 0x70000000
+ * window; littlefs reads become a plain memcpy from the window (faster
+ * than indirect commands).  Program/erase require indirect mode, so those
+ * operations briefly drop the mapping under xNorWindowMutex; the AI
+ * inference task holds the same mutex while the NPU fetches weights so it
+ * never sees the window down (a bus access to an unmapped window faults).
+ *
+ * EXTMEM_WriteInMappedMode is deliberately NOT used: it toggles the global
+ * D-cache around each page copy (stm32_sfdp_driver.c), which is unsafe
+ * next to live DCMIPP/VENC/W6X-SPI DMA in this firmware. */
+#define NOR_MAPPED_BASE    ( 0x70000000UL )    /* XSPI2 memory-mapped window */
+
+static volatile uint8_t  ucNorMapped     = 0U;
+static SemaphoreHandle_t xNorWindowMutex = NULL;
+
+/* Raw LPUART1 markers (mirror of mp_raw_putc — static there).  The first
+ * mapped-window memcpy after a NOR link change is the AXI-stall suspect:
+ * a mis-negotiated DTR mapping freezes the core with no fault and no
+ * further output, so these brackets are the only evidence that survives. */
+static void prvLfsRawPutc( char c )
+{
+    for( uint32_t i = 0; i < 600000UL; i++ )
+    {
+        if( *( volatile uint32_t * ) 0x56000C1CUL & ( 1UL << 7 ) )
+        {
+            *( volatile uint32_t * ) 0x56000C28UL = ( uint32_t ) c;
+            return;
+        }
+    }
+}
+
+static void prvLfsRaw( const char * pcStr )
+{
+    while( *pcStr != '\0' )
+    {
+        prvLfsRawPutc( *pcStr++ );
+    }
+}
+
+/* Held by littlefs prog/erase while the window is down, and by the AI task
+ * while the NPU/CPU reads the weights region (see ai_detection.c). */
+void vNorWindowLock( void )
+{
+    if( xNorWindowMutex != NULL )
+    {
+        ( void ) xSemaphoreTake( xNorWindowMutex, portMAX_DELAY );
+    }
+}
+
+void vNorWindowUnlock( void )
+{
+    if( xNorWindowMutex != NULL )
+    {
+        ( void ) xSemaphoreGive( xNorWindowMutex );
+    }
+}
+
+static void prvNorMapSet( uint8_t ucEnable )
+{
+    if( EXTMEM_MemoryMappedMode( EXTMEMORY_1,
+                                 ( ucEnable != 0U ) ? EXTMEM_ENABLE : EXTMEM_DISABLE )
+        == EXTMEM_OK )
+    {
+        ucNorMapped = ucEnable;
+    }
+    else
+    {
+        prvLfsRaw( ( ucEnable != 0U ) ? "[LFS] map-on FAILED\r\n"
+                                      : "[LFS] map-off FAILED\r\n" );
+        LogError( "NOR mapped-mode %s failed",
+                  ( ucEnable != 0U ) ? "enable" : "disable" );
+    }
+}
 
 #ifdef LFS_NO_MALLOC
 static uint8_t __ALIGN_BEGIN ucReadBuffer[ CONFIG_SIZE_CACHE_BUFFER ] __ALIGN_END = { 0 };
@@ -167,6 +245,12 @@ static void vPopulateConfig( struct lfs_config * pxCfg,
 
         vPopulateConfig( pxCfg, pxCtx );
 
+        xNorWindowMutex = xSemaphoreCreateMutex();
+        configASSERT( xNorWindowMutex != NULL );
+
+        /* Enter steady-state memory-mapped mode (see header comment). */
+        prvNorMapSet( 1U );
+
         ( void ) xSemaphoreGive( pxCtx->xMutex );
 
         return pxCfg;
@@ -199,9 +283,31 @@ static int lfs_port_read( const struct lfs_config * c,
 
     uint32_t ulReadAddr = XPI_START_ADDRESS + ( block * c->block_size ) + off;
 
-    if(EXTMEM_Read(pxCtx->MemId, ulReadAddr, pvBuffer, size) != EXTMEM_OK)
+    if( ucNorMapped != 0U )
     {
-    	lReturnValue = -1;
+        static uint8_t ucFirstMapRead = 1U;
+
+        /* Serialize against prog/erase dropping the window mid-read. */
+        vNorWindowLock();
+
+        if( ucFirstMapRead != 0U )
+        {
+            prvLfsRaw( "[LFS] mapread>" );
+        }
+
+        memcpy( pvBuffer, ( const void * ) ( NOR_MAPPED_BASE + ulReadAddr ), size );
+
+        if( ucFirstMapRead != 0U )
+        {
+            ucFirstMapRead = 0U;
+            prvLfsRaw( "ok\r\n" );
+        }
+
+        vNorWindowUnlock();
+    }
+    else if( EXTMEM_Read( pxCtx->MemId, ulReadAddr, pvBuffer, size ) != EXTMEM_OK )
+    {
+        lReturnValue = -1;
     }
 
     LogDebug( "Reading address 0x%010lX, size: %lu, rv: %ld", ulReadAddr, size, lReturnValue );
@@ -236,6 +342,15 @@ static int lfs_port_prog( const struct lfs_config * pxCfg,
     LogDebug( "Programming Start Addr: 0x%010lX, End Addr: 0x%010lX, size: %lu, block: %lu, offset: %lu, rv: %ld",
               ulStartAddr, ulLastAddr, size, block, off, lReturnValue );
 
+    /* Indirect commands require the mapped window down; restore afterwards. */
+    vNorWindowLock();
+    uint8_t ucWasMapped = ucNorMapped;
+
+    if( ucWasMapped != 0U )
+    {
+        prvNorMapSet( 0U );
+    }
+
     for( uint32_t ulWriteAddr = ulStartAddr; ulWriteAddr <= ulLastAddr; ulWriteAddr += MX66LM_PROGRAM_FIFO_LEN )
     {
         LogDebug( "Writing block at addr: 0x%010lX, len: %lu", ulWriteAddr, MX66LM_PROGRAM_FIFO_LEN );
@@ -246,6 +361,13 @@ static int lfs_port_prog( const struct lfs_config * pxCfg,
             break;
         }
     }
+
+    if( ucWasMapped != 0U )
+    {
+        prvNorMapSet( 1U );
+    }
+
+    vNorWindowUnlock();
 
     return lReturnValue;
 }
@@ -264,10 +386,26 @@ static int lfs_port_erase( const struct lfs_config * pxCfg,
 
     LogDebug( "Starting erase operation addr: 0x%010lX ", ulEraseAddr );
 
+    /* Indirect commands require the mapped window down; restore afterwards. */
+    vNorWindowLock();
+    uint8_t ucWasMapped = ucNorMapped;
+
+    if( ucWasMapped != 0U )
+    {
+        prvNorMapSet( 0U );
+    }
+
     if(EXTMEM_EraseSector(pxCtx->MemId, ulEraseAddr, pxCfg->block_size)!= EXTMEM_OK)
     {
         lReturnValue = -1;
     }
+
+    if( ucWasMapped != 0U )
+    {
+        prvNorMapSet( 1U );
+    }
+
+    vNorWindowUnlock();
 
     LogDebug( "Erase operation completed. Address: 0x%010lX Return Value: %ld", ulEraseAddr, lReturnValue );
 

@@ -19,6 +19,10 @@
 #include "stm32n6xx_hal.h"
 #include "ewl.h"
 
+#include "logging_levels.h"
+#define LOG_LEVEL    LOG_INFO
+#include "logging.h"
+
 /* Internal allocator for encoder HW buffers (placed in PSRAM) */
 #define VENC_ALLOCATOR_SIZE     ( 4U * 1024U * 1024U )
 /* RATE_CTRL_QP_DEFAULT raised 25 -> 40.  This is the starting QP for the
@@ -80,6 +84,7 @@ typedef struct
     int         lIsSpsPpsDone;
     uint64_t    ullPicCnt;
     int         lGopLen;
+    int         lRcGopLen;   /* rate-control window passed to prvSetupVbr (fps), NOT the intra period */
 } VencContext_t;
 
 static VencContext_t xVencInstance;
@@ -101,6 +106,100 @@ static void prvSetupVbr( H264EncRateCtrl * pxRate,
     pxRate->gopLen       = lGopLen;
     pxRate->bitPerSecond = lBitrate;
     pxRate->intraQpDelta = 0;
+}
+
+/* ── Adaptive bitrate (2026-07-20) ──────────────────────────────────────────
+ * The link-capacity A/B proved 1 Mbps overruns the W6X on a degraded RF
+ * link (sessions die ~2 s after media start) while 500 kbps soaks.  Adapt
+ * automatically: start LOW; whenever the ICE layer's nominated-socket
+ * send-trouble counter advances, snap to LOW and hold; after a quiet
+ * window, step up to HIGH.  Sampled once a second from the encode path
+ * (media task context, between frames — H264EncSetRateCtrl is legal
+ * there). */
+#define ENC_BITRATE_LOW_BPS       ( 500000 )
+#define ENC_BITRATE_HIGH_BPS      ( 1000000 )
+#define ENC_ADAPT_POLL_MS         ( 1000UL )
+#define ENC_UPSHIFT_QUIET_MS      ( 30000UL )
+
+extern volatile uint32_t g_iceNominatedSendFailures;   /* ice_controller_net.c */
+
+static int32_t lActiveBitrate = ENC_BITRATE_LOW_BPS;
+
+static void prvAdaptBitrate( VencContext_t * pxCtx )
+{
+    static uint32_t ulLastPollMs  = 0U;
+    static uint32_t ulLastFailSeen = 0U;
+    static uint32_t ulLastFailMs  = 0U;
+    static uint8_t  ucAdaptInit   = 0U;
+    uint32_t ulNowMs = HAL_GetTick();
+    uint32_t ulFails = g_iceNominatedSendFailures;
+    int32_t  lWantedBitrate = lActiveBitrate;
+
+    if( ( ucAdaptInit != 0U ) && ( ( ulNowMs - ulLastPollMs ) < ENC_ADAPT_POLL_MS ) )
+    {
+        return;
+    }
+
+    /* First call, or a >5 s gap in encoding = a new session: every session
+     * starts LOW and must earn the upshift with 30 in-session quiet
+     * seconds.  (v1 bug: "never failed yet" upshifted 0.14 s after media
+     * start, and quiet time carried across sessions — both put 1 Mbps +
+     * a QP-jolt jumbo frame on a fresh TURN path and wedged the W6X.) */
+    if( ( ucAdaptInit == 0U ) || ( ( ulNowMs - ulLastPollMs ) > 5000U ) )
+    {
+        ucAdaptInit = 1U;
+        ulLastPollMs = ulNowMs;
+        ulLastFailSeen = ulFails;
+        ulLastFailMs = ulNowMs;
+        lWantedBitrate = ENC_BITRATE_LOW_BPS;
+    }
+    else
+    {
+        ulLastPollMs = ulNowMs;
+
+        if( ulFails != ulLastFailSeen )
+        {
+            ulLastFailSeen = ulFails;
+            ulLastFailMs = ulNowMs;
+            lWantedBitrate = ENC_BITRATE_LOW_BPS;
+        }
+        else if( ( ulNowMs - ulLastFailMs ) >= ENC_UPSHIFT_QUIET_MS )
+        {
+            lWantedBitrate = ENC_BITRATE_HIGH_BPS;
+        }
+    }
+
+    if( lWantedBitrate != lActiveBitrate )
+    {
+        H264EncRateCtrl xRate;
+        int ret;
+
+        /* Mid-stream the encoder rejects a from-scratch struct (returns
+         * H264ENC_INVALID_ARGUMENT): fetch the live settings and change
+         * only the bitrate. */
+        ret = H264EncGetRateCtrl( pxCtx->xHdl, &xRate );
+
+        if( ret == H264ENC_OK )
+        {
+            xRate.bitPerSecond = lWantedBitrate;
+            ret = H264EncSetRateCtrl( pxCtx->xHdl, &xRate );
+        }
+
+        if( ret == H264ENC_OK )
+        {
+            lActiveBitrate = lWantedBitrate;
+            LogInfo( "[ENC] adaptive bitrate -> %ld bps (sendFails=%lu)",
+                     ( long ) lWantedBitrate, ( unsigned long ) ulFails );
+        }
+        else
+        {
+            /* Back off a full quiet window instead of retrying at 1 Hz. */
+            ulLastFailMs = ulNowMs;
+            LogWarn( "[ENC] rate-ctrl change failed: %d - keeping %ld bps, retry in %lus",
+                     ret, ( long ) lActiveBitrate,
+                     ( unsigned long ) ( ENC_UPSHIFT_QUIET_MS / 1000U ) );
+        }
+    }
 }
 
 /* ── Encoding helpers ───────────────────────────────────────────────────── */
@@ -317,8 +416,18 @@ void MediaEnc_Init( const MediaEncConf_t * pxConf )
      *
      * 2026-04-16: trimmed to 1.0 Mbps.  At 1.5 Mbps I-frames still hit
      * ~40 KB, exceeding the 500 ms socket-mutex window over UDP TURN.
-     * 1.0 Mbps / 15 fps targets ~8 KB P-frames and ~25 KB I-frames.      */
-    lTargetBitrate = 1000000;
+     * 1.0 Mbps / 15 fps targets ~8 KB P-frames and ~25 KB I-frames.
+     *
+     * 2026-07-20: 500 kbps LINK-CAPACITY A/B confirmed the ceiling: on a
+     * degraded RF evening 1 Mbps (~100 pkt/s) kills sessions ~2 s after
+     * media start while 500 kbps soaks (F1800+, full AI).
+     *
+     * 2026-07-20: ADAPTIVE.  Start at ENC_BITRATE_LOW_BPS; prvAdaptBitrate
+     * (called each frame, 1 Hz poll) upshifts to ENC_BITRATE_HIGH_BPS
+     * after a 30 s window with no nominated-socket send trouble and snaps
+     * back to LOW the moment the ICE congestion counter advances.        */
+    lTargetBitrate = ENC_BITRATE_LOW_BPS;
+    pxCtx->lRcGopLen = pxConf->lFps;
     prvSetupVbr( &xRate, lTargetBitrate, pxConf->lFps, RATE_CTRL_QP_DEFAULT );
     ret = H264EncSetRateCtrl( pxCtx->xHdl, &xRate );
     assert( ret == H264ENC_OK );
@@ -342,6 +451,8 @@ int MediaEnc_EncodeFrame( uint8_t * pInY,
     size_t          xStartLen = 0;
     size_t          xFrameLen;
     int             ret;
+
+    prvAdaptBitrate( pxCtx );
 
     if( !pxCtx->lIsSpsPpsDone )
     {

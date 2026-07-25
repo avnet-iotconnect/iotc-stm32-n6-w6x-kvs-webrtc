@@ -332,16 +332,27 @@ const char *iotcl_c2d_get_command(IotclC2dEventData data) {
         IOTCL_ERROR(IOTCL_ERR_MISSING_VALUE, "c2d event data null while attempting to get the \"command\" value");
         return NULL;
     }
-    /* ct=112/113 (dashboard Start Video / Stop Video) are dispatched to the same
-     * command callback as ct=0 (see iotcl_c2d_process_callback) and carry their
-     * command in the same "cmd" field, so accept all three here too. */
+    /* ct=112/113 (dashboard Start/Stop Video) are dispatched to the same command
+     * callback as ct=0, so accept all three here. */
     if (data->type != IOTCL_C2D_ET_DEVICE_COMMAND &&
         data->type != IOTCL_C2D_ET_DEVICE_COMMAND_112 &&
         data->type != IOTCL_C2D_ET_DEVICE_COMMAND_113) {
         IOTCL_ERROR(IOTCL_ERR_MISSING_VALUE, "Incorrect c2d event type %d! Expected a device command type.", data->type);
         return NULL;
     }
-    return iotcl_c2d_get_string_value(data->root, true, "cmd");
+    /* Only ct=0 (device command) actually carries a "cmd" field.  ct=112/113
+     * (Start/Stop Video) carry none, so don't flag its absence as an error for
+     * those — the caller distinguishes them via iotcl_c2d_get_event_type(). */
+    return iotcl_c2d_get_string_value(data->root,
+                                      data->type == IOTCL_C2D_ET_DEVICE_COMMAND,
+                                      "cmd");
+}
+
+int iotcl_c2d_get_event_type(IotclC2dEventData data) {
+    if (!data) {
+        return -1;
+    }
+    return (int) data->type;
 }
 
 int iotcl_c2d_get_ota_url_count(IotclC2dEventData data) {
