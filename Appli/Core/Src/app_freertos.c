@@ -323,7 +323,7 @@ void StartDefaultTask(void *argument)
  * sustained video upload.  eth_net_main owns tcpip_init and satisfies
  * EVT_MASK_NET_CONNECTED when DHCP binds - nothing above the socket
  * layer knows the difference (see eth_netif.c). */
-#define NET_USE_ETHERNET 1
+#define NET_USE_ETHERNET 0
 
 #if defined(ST67W6X_RCP) && !NET_USE_ETHERNET
   xTaskCreate(net_main, "W6xNet", TASK_STACK_SIZE_W6X, NULL, TASK_PRIO_W6X, NULL);

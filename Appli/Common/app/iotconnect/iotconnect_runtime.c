@@ -1606,17 +1606,64 @@ static BaseType_t prvParseDemoLedCommand( const char * pcCommand,
     return pdTRUE;
 }
 
+/* IoTConnect dashboard WebRTC controls arrive on the command topic as these
+ * event types ("ct").  They carry no "cmd" field. */
+#define IOTCONNECT_CT_START_VIDEO    ( 112 )
+#define IOTCONNECT_CT_STOP_VIDEO     ( 113 )
+
 static void prvDemoCommandCallback( IotclC2dEventData xEventData )
 {
-    const char * pcCommand = iotcl_c2d_get_command( xEventData );
+    const int lType = iotcl_c2d_get_event_type( xEventData );
     const char * pcAckId = iotcl_c2d_get_ack_id( xEventData );
+    const char * pcCommand;
     IoTConnectQueuedEvent_t xEvent = { 0 };
+
+    /* ct=112/113 are the dashboard "Start Video"/"Stop Video" signals.  They
+     * carry no "cmd" field, and KVS streaming is already driven by the viewer's
+     * signaling connection, so acknowledge them instead of treating them as a
+     * malformed command (which spammed an error and NAKed the dashboard). */
+    if( ( lType == IOTCONNECT_CT_START_VIDEO ) || ( lType == IOTCONNECT_CT_STOP_VIDEO ) )
+    {
+        LogInfo( ( "IoTConnect %s Video request (ct=%d)",
+                   ( lType == IOTCONNECT_CT_START_VIDEO ) ? "Start" : "Stop",
+                   lType ) );
+        if( pcAckId != NULL )
+        {
+            prvQueueCmdAckEvent( pcAckId,
+                                 IOTCL_C2D_EVT_CMD_SUCCESS_WITH_ACK,
+                                 "OK" );
+        }
+        return;
+    }
+
+    pcCommand = iotcl_c2d_get_command( xEventData );
 
     if( pcCommand == NULL )
     {
         prvQueueCmdAckEvent( pcAckId,
                              IOTCL_C2D_EVT_CMD_FAILED,
                              "Invalid command payload" );
+        return;
+    }
+
+    /* LCD preview on/off (default ON at powerup).  Independent of KVS: the
+     * camera and AI detection run continuously; this only toggles what the
+     * on-board panel displays. */
+    if( ( strcmp( pcCommand, "LCD_ON" ) == 0 ) ||
+        ( strcmp( pcCommand, "LCD_OFF" ) == 0 ) )
+    {
+        extern void LcdPreview_SetEnabled( uint8_t ucEnable );
+        uint8_t ucOn = ( strcmp( pcCommand, "LCD_ON" ) == 0 ) ? 1U : 0U;
+
+        LcdPreview_SetEnabled( ucOn );
+        LogInfo( ( "LCD preview %s", ucOn ? "ON" : "OFF" ) );
+
+        if( pcAckId != NULL )
+        {
+            prvQueueCmdAckEvent( pcAckId,
+                                 IOTCL_C2D_EVT_CMD_SUCCESS_WITH_ACK,
+                                 "OK" );
+        }
         return;
     }
 

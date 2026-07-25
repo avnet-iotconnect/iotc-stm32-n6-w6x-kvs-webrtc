@@ -86,6 +86,11 @@ int iotcl_c2d_process_event_with_length(const uint8_t *data, size_t data_len);
 // The user must manually free the returned string when it is no longer needed.
 const char *iotcl_c2d_get_command(IotclC2dEventData data);
 
+// Returns the numeric c2d event type ("ct") of the message, or -1 if data is
+// NULL. Values follow the IoTConnect 2.1 protocol; notably 112 = dashboard
+// "Start Video" and 113 = "Stop Video" (these carry no "cmd" field).
+int iotcl_c2d_get_event_type(IotclC2dEventData data);
+
 // Returns the number of files available for download. The OTA event will always have at least one URL.
 int iotcl_c2d_get_ota_url_count(IotclC2dEventData data);
 

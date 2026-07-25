@@ -739,29 +739,52 @@ static int32_t GetIceServerList( AppContext_t * pAppContext,
                     continue;
                 }
 
-                /* W6x WiFi module: skip all UDP TURN/TURNS URIs.
-                 * Inbound WAN UDP is dropped by the ST67W611M module —
-                 * verified again on 2026-04-16 (V1.3.0 MW): UDP TURN
-                 * Allocate on port 443 stays in ALLOCATING forever.
-                 * The V1.3.0 NTP-over-UDP fix does not extend to TURN.
+                /* 2026-07-24: WAN UDP RX is CONFIRMED WORKING on the N6 with
+                 * V1.3.0 (public DNS/53 responses arrive — proven with the
+                 * lwip_netif.c WAN_UDP_RX_DIAG trace, contradicting the old
+                 * "WAN UDP dropped" premise below).  And empirically the
+                 * W6X wedge is TCP-TX-specific — UDP media streams fine while
+                 * turns:?transport=tcp starves.  So RE-ENABLE plain UDP TURN
+                 * (turn:?transport=udp) so relay sessions can use the UDP
+                 * path.  turns:?transport=tcp is kept only on Ethernet (see the
+                 * KVS_TURN_DROP_TCP skip below).
                  *
-                 * Also skip turns:?transport=udp (DTLS-TURN over UDP)
-                 * which ice_controller_net.c rejects anyway — letting
-                 * it through wastes a turnServerCount slot and blocks
-                 * the turns:?transport=tcp entry we actually need.     */
-                if( pOutputIceServers[ currentIceServerIndex ].protocol == ICE_SOCKET_PROTOCOL_UDP )
+                 * Still skip turns:?transport=udp (DTLS-TURN over UDP): the
+                 * net layer (ice_controller_net.c) rejects it downstream, so
+                 * accepting it only wastes a TURN slot. */
+                if( ( pOutputIceServers[ currentIceServerIndex ].serverType == ICE_CONTROLLER_ICE_SERVER_TYPE_TURNS ) &&
+                    ( pOutputIceServers[ currentIceServerIndex ].protocol == ICE_SOCKET_PROTOCOL_UDP ) )
                 {
-                    LogInfo( ( "Skipping UDP TURN URI (W6x WAN UDP broken): %.*s",
+                    LogInfo( ( "Skipping DTLS-TURN-over-UDP URI (rejected downstream): %.*s",
                                ( int ) pIceServerConfigs[ i ].iceServerUris[ j ].uriLength,
                                pIceServerConfigs[ i ].iceServerUris[ j ].uri ) );
                     continue;
                 }
 
-                /* W6x WiFi module: limit to 1 TCP/TLS TURN server to
-                 * avoid overwhelming the module's SPI bandwidth.       */
+#if KVS_TURN_DROP_TCP
+                /* Wi-Fi (W6X) only: drop turns:?transport=tcp entirely.  The
+                 * module's TCP-TX path wedges under load, so a relay session
+                 * nominated onto the TCP relay starves ([TLS] snd stall ->
+                 * GATE CLOSE) and the viewer stays black; ICE picks UDP vs TCP
+                 * relay non-deterministically.  Removing it forces the reliable
+                 * UDP relay every time.  Kept on Ethernet (KVS_TURN_DROP_TCP=0).
+                 * See demo_config.h / docs/w6x_module_notes.md. */
+                if( ( pOutputIceServers[ currentIceServerIndex ].serverType == ICE_CONTROLLER_ICE_SERVER_TYPE_TURNS ) &&
+                    ( pOutputIceServers[ currentIceServerIndex ].protocol == ICE_SOCKET_PROTOCOL_TCP ) )
+                {
+                    LogInfo( ( "Skipping TCP-TURN URI (W6x TCP-TX wedges): %.*s",
+                               ( int ) pIceServerConfigs[ i ].iceServerUris[ j ].uriLength,
+                               pIceServerConfigs[ i ].iceServerUris[ j ].uri ) );
+                    continue;
+                }
+#endif /* KVS_TURN_DROP_TCP */
+
+                /* W6x WiFi module: keep the TURN entries bounded to limit SPI
+                 * load, but allow up to 2 so one UDP TURN (primary) + one
+                 * TCP/TLS TURN (fallback) can coexist. */
                 if( ( ( pOutputIceServers[ currentIceServerIndex ].serverType == ICE_CONTROLLER_ICE_SERVER_TYPE_TURN ) ||
                       ( pOutputIceServers[ currentIceServerIndex ].serverType == ICE_CONTROLLER_ICE_SERVER_TYPE_TURNS ) ) &&
-                    ( turnServerCount >= 1 ) )
+                    ( turnServerCount >= 2 ) )
                 {
                     LogInfo( ( "Skipping extra TURN server (W6x limit): %.*s",
                                ( int ) pIceServerConfigs[ i ].iceServerUris[ j ].uriLength,

@@ -23,6 +23,18 @@
  * the panel itself worked, video was visible).  On the Ethernet
  * transport (NET_USE_ETHERNET, radio compiled out) that mechanism is
  * gone: re-enabled 2026-07-22. */
+/* TEST 2026-07-23: LCD OFF for the Wi-Fi (NET_USE_ETHERNET=0) KVS retest.
+ * An active LCD panel radiates into the W6X module and starved relay TX
+ * (instant rx_stall) on the Wi-Fi transport — that is why the LCD was only
+ * re-enabled after the Ethernet pivot.  Keep it off to isolate whether the
+ * V1.3.0 Wi-Fi transport itself can sustain KVS; re-enable ( 1 ) once we
+ * know the transport holds.
+ * 2026-07-25: LCD-ON + UDP relay CONFIRMED CLEAN — relay session held
+ * F0->F2160+ (~154s+), ovr=0 lur=0, zero TLS stalls, only 2 brief rx_stall
+ * clusters (<=14ms, FEWER than the LCD-off run -> the panel is NOT the
+ * cause; those are independent W6X SPI-bus hiccups).  The old EMI-starvation
+ * was specific to the fragile TCP-TX TURN path, which the UDP-relay build no
+ * longer uses.  LCD ships ON by default on the Wi-Fi UDP-relay build. */
 #define LCD_PREVIEW_ENABLE    ( 1 )
 
 /* One detection box, normalized coordinates (0..1) relative to the video
@@ -50,6 +62,11 @@ void LcdPreview_ShowFrameISR( uint8_t * pucY, uint8_t * pucUV );
 
 /* Hide the video layer (session stopped / camera stopping).  Task ctx. */
 void LcdPreview_Blank( void );
+
+/* Runtime on/off for the whole preview (video + overlay).  Powerup default is
+ * ON.  The camera and AI detection run continuously regardless; this only
+ * controls what the panel displays.  Task context. */
+void LcdPreview_SetEnabled( uint8_t ucEnable );
 
 /* Redraw the overlay with the given boxes and flip it.  Task context
  * (called from the AI task after each inference).  ulCount may be 0 to

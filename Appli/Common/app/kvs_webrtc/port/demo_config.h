@@ -28,6 +28,26 @@
 /* KVS agent string reported to the signaling service */
 #define AWS_KVS_AGENT_NAME  "AWS-SDK-KVS-STM32N6"
 
+/* Drop TURN-over-TLS/TCP relay candidates (turns:?transport=tcp) from the ICE
+ * server list.
+ *
+ * DISABLED (0) — 2026-07-25, after testing showed it makes things worse:
+ * dropping turns:tcp on Wi-Fi caused the TURN Allocate to yield NO relay
+ * candidate at all (fresh boot, first Start Video: only host+srflx gathered,
+ * "Unable to find valid connection" -> black).  Root cause: the W6X's plain-UDP
+ * TURN Allocate is intermittent (the Allocate response over WAN UDP does not
+ * reliably arrive), and turns:tcp (TLS/TCP Allocate) was actually the RELIABLE
+ * relay that let sessions connect at all.  Removing it left only the flaky UDP
+ * Allocate -> often no relay -> can't connect.  So keep turns:tcp (0).
+ *
+ * The TCP relay's *media* path still wedges once ICE nominates it (that
+ * black-after-connect is a separate symptom); the real fix is making the UDP
+ * TURN relay reliable / preferred, NOT removing the TCP one.  See
+ * docs/w6x_module_notes.md. */
+#ifndef KVS_TURN_DROP_TCP
+    #define KVS_TURN_DROP_TCP  0
+#endif
+
 /* ── Codec selection (exactly one of each must be 1) ─────────────────────── */
 
 /* Video codec */

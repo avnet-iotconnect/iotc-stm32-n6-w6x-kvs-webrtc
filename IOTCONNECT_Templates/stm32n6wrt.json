@@ -118,6 +118,20 @@
    "requiredParam": false,
    "requiredAck": true,
    "isOTACommand": false
+  },
+  {
+   "name": "Turn LCD Preview On",
+   "command": "LCD_ON",
+   "requiredParam": false,
+   "requiredAck": true,
+   "isOTACommand": false
+  },
+  {
+   "name": "Turn LCD Preview Off",
+   "command": "LCD_OFF",
+   "requiredParam": false,
+   "requiredAck": true,
+   "isOTACommand": false
   }
  ],
  "messageVersion": "2.1",

@@ -56,6 +56,10 @@ static LTDC_HandleTypeDef xLtdc;
 
 static uint8_t  ucLcdReady   = 0U;
 static uint8_t  ucVideoLive  = 0U;       /* Layer 1 configured+enabled     */
+/* Runtime display toggle (default ON at powerup).  Independent of KVS: the
+ * camera + AI detection run continuously; this only gates what the panel
+ * shows.  Set via LcdPreview_SetEnabled (e.g. an IoTConnect command). */
+static volatile uint8_t ucLcdEnabled = 1U;
 static uint8_t  ucOvlDrawIdx = 0U;       /* overlay buffer being drawn     */
 static volatile uint32_t ulUnderruns = 0U;
 
@@ -278,7 +282,7 @@ void LcdPreview_Init( void )
 
 void LcdPreview_ShowFrameISR( uint8_t * pucY, uint8_t * pucUV )
 {
-    if( ( ucLcdReady == 0U ) || ( pucY == NULL ) || ( pucUV == NULL ) )
+    if( ( ucLcdReady == 0U ) || ( ucLcdEnabled == 0U ) || ( pucY == NULL ) || ( pucUV == NULL ) )
     {
         return;
     }
@@ -323,6 +327,40 @@ void LcdPreview_Blank( void )
     ucVideoLive = 0U;                 /* next session re-configures layer 1 */
 }
 
+/* Runtime on/off for the whole preview (video Layer 1 + overlay Layer 2).
+ * Powerup default is ON.  The camera + AI detection keep running regardless;
+ * this only controls what the panel displays.  Called from task context. */
+void LcdPreview_SetEnabled( uint8_t ucEnable )
+{
+    if( ucLcdReady == 0U )
+    {
+        /* LCD not brought up (LCD_PREVIEW_ENABLE=0 or init failed): just
+         * remember the intent so a later init could honor it. */
+        ucLcdEnabled = ( ucEnable != 0U ) ? 1U : 0U;
+        return;
+    }
+
+    if( ucEnable != 0U )
+    {
+        /* Re-enable the overlay layer while the feeds are still gated off, so
+         * the DCMIPP ISR / AI task can't race these HAL writes; then unblank.
+         * Layer 1 (video) re-arms on the next ShowFrameISR (ucVideoLive was
+         * cleared by Blank). */
+        __HAL_LTDC_LAYER_ENABLE( &xLtdc, LTDC_LAYER_2 );
+        ( void ) HAL_LTDC_ReloadLayer( &xLtdc, LTDC_RELOAD_VERTICAL_BLANKING,
+                                       LTDC_LAYER_2 );
+        ucLcdEnabled = 1U;
+    }
+    else
+    {
+        ucLcdEnabled = 0U;   /* gate the ISR + overlay off before touching HAL */
+        LcdPreview_Blank();                                 /* Layer 1 off */
+        __HAL_LTDC_LAYER_DISABLE( &xLtdc, LTDC_LAYER_2 );   /* Layer 2 off */
+        ( void ) HAL_LTDC_ReloadLayer( &xLtdc, LTDC_RELOAD_VERTICAL_BLANKING,
+                                       LTDC_LAYER_2 );
+    }
+}
+
 /* ── Overlay ────────────────────────────────────────────────────────────── */
 
 static void prvOvlFillRect( uint16_t * pusBuf, int32_t lX, int32_t lY,
@@ -363,7 +401,7 @@ void LcdPreview_UpdateOverlay( const LcdBox_t * pxBoxes, uint32_t ulCount )
     uint16_t * pusBuf;
     uint32_t   ulIdx;
 
-    if( ucLcdReady == 0U )
+    if( ( ucLcdReady == 0U ) || ( ucLcdEnabled == 0U ) )
     {
         return;
     }
