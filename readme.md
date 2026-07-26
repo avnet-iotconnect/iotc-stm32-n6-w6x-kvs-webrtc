@@ -13,10 +13,20 @@ IOTCONNECT reference firmware for the [STM32N6570-DK](https://www.st.com/en/eval
 with [ST67W611M1](https://www.st.com/content/st_com/en/campaigns/st67w-wifi6-bluetooth-thread-module-z13.html) Wi-Fi 6
 module.
 
+> [!TIP]
+> **🚀 New here? Start with the [QUICKSTART](QUICKSTART.md).** It takes you from nothing to a live
+> device — IOTCONNECT account, flashing **pre-built firmware** (Wi-Fi *or* Ethernet variants,
+> one-file hex images, no IDE or build tools), provisioning, and a working dashboard — using only
+> STM32CubeProgrammer, on Windows or Linux. This readme covers the full project (building from
+> source, architecture, module details).
+
 Features:
 
 - **IOTCONNECT** MQTT telemetry and cloud-to-device commands
-- **AWS KVS WebRTC** live video streaming (auto-configured from IOTCONNECT identity)
+- **AWS KVS WebRTC** live video streaming (auto-configured from IOTCONNECT identity) over **Wi-Fi or
+  on-board Gigabit Ethernet** (see [docs/ethernet_support.md](docs/ethernet_support.md))
+- **On-device AI people detection** on the Neural-ART NPU (YOLOv2) with telemetry and LCD overlay
+- **LCD live preview** with detection boxes, cloud-controllable (`LCD_ON`/`LCD_OFF`)
 - Hardware-accelerated cryptography (RNG, SHA256, AES, PKA)
 - On-device certificate generation and PKCS#11 key management
 
@@ -75,13 +85,16 @@ Also needed:
 
 ## Software You Need
 
-- [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html) **`2.20.x`**
+- [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html) **`2.20.0` or newer**
 
   > [!IMPORTANT]
-  > STM32CubeProgrammer `2.21.0+` changed STM32N6 signing behavior and will break the flashing steps in this guide as
-  > written (they'd need `-align`/`--align` flags added). ST's download page defaults to the newest version — you need to
-  > explicitly select `2.20.x` from the version dropdown/archive. See [docs/troubleshooting.md](docs/troubleshooting.md)
-  > if you're stuck on a newer version.
+  > Starting with STM32CubeProgrammer `2.21.0`, ST's signing tool no longer auto-pads STM32N6
+  > payloads to the `0x400` offset — the **`-align` flag is mandatory** there ([ST errata](https://wiki.st.com/stm32mcu/wiki/STM32CubeProgrammer_errata_2.23.x));
+  > images signed without it flash successfully but **silently never boot**. `bin/flash.ps1`
+  > detects your tool version and appends `-align` automatically. If you sign manually with the
+  > CLI commands below, keep `-align` on `2.21.0+` and drop it on `2.20.x` (the flag doesn't exist
+  > there — `2.20.x` pads automatically). Both paths validated on-board with `2.20.0` and `2.23.0`.
+  > See [docs/troubleshooting.md](docs/troubleshooting.md) for details.
 
 - [STM32CubeIDE](https://www.st.com/en/development-tools/stm32cubeide.html) — only needed if you're building firmware
   from source. Pre-built binaries are already committed under `bin/FSBL` and `bin/Appli`, so most users can skip this.
@@ -271,14 +284,16 @@ SIGNING=~/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/STM32_SigningTool
 EXT_LOADER=~/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/ExternalLoader/MX66UW1G45G_STM32N6570-DK.stldr
 REPO=$(pwd)   # run this from the repo root
 
+# NOTE: -align is required on STM32CubeProgrammer 2.21.0+ (drop it on 2.20.x,
+# where the flag doesn't exist and payload alignment is automatic).
 $SIGNING \
   -bin "$REPO/bin/FSBL/Release/stm32n6570_dk_w6x_iot_reference_FSBL.bin" \
-  -nk -of 0x80000000 -t fsbl -hv 2.3 \
+  -nk -of 0x80000000 -t fsbl -hv 2.3 -align \
   -o /tmp/FSBL-trusted.bin
 
 $SIGNING \
   -bin "$REPO/bin/Appli/HW_Crypto/stm32n6570_dk_w6x_iot_reference_Appli.bin" \
-  -nk -of 0x80000000 -t fsbl -hv 2.3 \
+  -nk -of 0x80000000 -t fsbl -hv 2.3 -align \
   -o /tmp/Appli-trusted.bin
 
 $CUBEPROG -c port=SWD mode=HOTPLUG ap=1 \

@@ -33,13 +33,25 @@ Check:
 
 1. If you built from STM32CubeIDE, run `bin\copy_hex_from_project.ps1` before `bin\run_all.ps1` or `bin\flash.ps1`.
 2. Confirm the staged files under `bin\Appli\...` and `bin\FSBL\...` match the build configuration you actually built.
-3. For this repo's signing command, STM32CubeProgrammer `2.20.x` is known-good.
-4. STM32CubeProgrammer `2.21.0+` changed STM32N6 signing behavior and requires `-align` / `--align` for STM32N6 images.
+3. STM32CubeProgrammer `2.21.0+` no longer auto-pads STM32N6 payloads to the `0x400` offset —
+   the `-align` / `--align` flag is **mandatory** there (ST errata). Without it, flash and verify
+   succeed but the image **silently never boots**: the payload lands at file offset `0x240` while
+   the header entry point and vectors are linked for `0x400`, so the BootROM jumps into misplaced
+   bytes. `2.20.x` pads automatically and has no `-align` flag.
+4. `bin\flash.ps1` handles this automatically: it detects `-align` support in the installed
+   signing tool's help text and appends the flag when present. If signing manually, add `-align`
+   on `2.21.0+` only.
+5. Root cause confirmed empirically (2026-07-26): a `2.23.0 -align` image is byte-identical to a
+   `2.20.0` image outside the random-fill padding extension (`0xA8`–`0x23F`, which differs even
+   between two consecutive runs of the same version). Both signing paths and `2.23.0` programming
+   validated on-board.
 
 References:
 
-- https://community.st.com/t5/stm32cubeprogrammer-mcus/signingtool-for-stm32n6-in-stm32cubeprogrammer-v2-21-0/td-p/859154
+- ST errata ("-align mandatory with STM32N6 from v2.21.0"): https://wiki.st.com/stm32mcu/wiki/STM32CubeProgrammer_errata_2.23.x
+- ST announcement: https://community.st.com/t5/stm32cubeprogrammer-mcus/signingtool-for-stm32n6-in-stm32cubeprogrammer-v2-21-0/td-p/859154
 - https://community.st.com/t5/stm32cubeprogrammer-mcus/no-padding-align-with-padding-in-stm32-signingtool-cli-2-21/td-p/859110
+- Same regression + fix in Zephyr: https://github.com/zephyrproject-rtos/zephyr/issues/99456
 
 ## Debug Load Issues After STM32CubeMX Regeneration
 

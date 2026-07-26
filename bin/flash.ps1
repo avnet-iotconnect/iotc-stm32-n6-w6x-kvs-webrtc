@@ -49,9 +49,20 @@ if ($isLinuxHost) {
     $SIGNING_TOOL = "/Applications/STMicroelectronics/STM32CubeProgrammer.app/Contents/MacOS/bin/STM32_SigningTool_CLI"
     $EXTERNAL_LOADER = "/Applications/STMicroelectronics/STM32CubeProgrammer.app/Contents/MacOS/bin/ExternalLoader/MX66UW1G45G_STM32N6570-DK.stldr"
 } elseif ($isWindowsHost) {
-    $PROGRAMMER = "C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammer20\bin\STM32_Programmer_CLI.exe"
-    $SIGNING_TOOL = "C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammer20\bin\STM32_SigningTool_CLI.exe"
-    $EXTERNAL_LOADER = "C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammer20\bin\ExternalLoader\MX66UW1G45G_STM32N6570-DK.stldr"
+    # Probe common install dirs: the default name first, then version-suffixed
+    # side-by-side installs (e.g. a kept 2.20 install renamed STM32CubeProgrammer20).
+    $cubeRoot = $null
+    foreach ($candidate in @("STM32CubeProgrammer", "STM32CubeProgrammer20", "STM32CubeProgrammer21", "STM32CubeProgrammer22", "STM32CubeProgrammer23")) {
+        $probe = "C:\Program Files\STMicroelectronics\STM32Cube\$candidate"
+        if (Test-Path -LiteralPath "$probe\bin\STM32_Programmer_CLI.exe" -PathType Leaf) { $cubeRoot = $probe; break }
+    }
+    if ($null -eq $cubeRoot) {
+        Write-Error "STM32CubeProgrammer not found under C:\Program Files\STMicroelectronics\STM32Cube\"
+        exit 1
+    }
+    $PROGRAMMER = "$cubeRoot\bin\STM32_Programmer_CLI.exe"
+    $SIGNING_TOOL = "$cubeRoot\bin\STM32_SigningTool_CLI.exe"
+    $EXTERNAL_LOADER = "$cubeRoot\bin\ExternalLoader\MX66UW1G45G_STM32N6570-DK.stldr"
 } else {
     Write-Error "Unsupported OS."
     exit 1
@@ -67,12 +78,23 @@ foreach ($requiredPath in @($FSBL_BIN_FILE, $APP_BIN_FILE, $PROGRAMMER, $SIGNING
 $SIGNED_FSBL_BIN = Join-Path $scriptDir "FSBL-trusted.bin"
 $SIGNED_APP_BIN = Join-Path $scriptDir "Appli-trusted.bin"
 
+# STM32CubeProgrammer 2.21.0+ no longer auto-pads STM32N6 payloads to the 0x400
+# offset; ST's errata makes "-align" mandatory there (the flag doesn't exist in
+# 2.20.x, which pads automatically). Detect support from the tool's own help
+# text so any installed version signs a bootable image.
+$signAlignArgs = @()
+$signHelp = (& "$SIGNING_TOOL" "--help") -join "`n"
+if ($signHelp -match "-align") {
+    $signAlignArgs = @("-align")
+    Write-Output "SigningTool supports -align (v2.21+): appending it for STM32N6 0x400 payload alignment."
+}
+
 # Required FSBL signing for BOOTROM copy and jump (adds padding and header)
-& "$SIGNING_TOOL" -bin "$FSBL_BIN_FILE" -nk -of 0x80000000 -t fsbl -o "$SIGNED_FSBL_BIN" -hv 2.3
+& "$SIGNING_TOOL" -bin "$FSBL_BIN_FILE" -nk -of 0x80000000 -t fsbl -o "$SIGNED_FSBL_BIN" -hv 2.3 @signAlignArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Required Appli signing for FSBL copy and jump (adds padding and header)
-& "$SIGNING_TOOL" -bin "$APP_BIN_FILE" -nk -of 0x80000000 -t fsbl -o "$SIGNED_APP_BIN" -hv 2.3
+& "$SIGNING_TOOL" -bin "$APP_BIN_FILE" -nk -of 0x80000000 -t fsbl -o "$SIGNED_APP_BIN" -hv 2.3 @signAlignArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Flash signed binaries to NOR external flash
