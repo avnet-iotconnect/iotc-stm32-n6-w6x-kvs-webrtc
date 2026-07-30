@@ -1025,6 +1025,30 @@ static void AddRelayCandidates( IceControllerContext_t * pCtx )
                 {
                     icn_raw_puts( "[icn] relay addCand>\r\n" );
                     iceResult = Ice_AddRelayCandidate( &pCtx->iceContext, &pCtx->iceServers[i].iceEndpoint, pCtx->iceServers[i].userName, pCtx->iceServers[i].userNameLength, pCtx->iceServers[i].password, pCtx->iceServers[i].passwordLength );
+
+                    /* docs/w6x_module_notes.md: bias nomination toward the UDP
+                     * relay.  The W6X TCP-TX path wedges under media load once
+                     * nominated ([TLS] snd stall -> GATE CLOSE), so advertise
+                     * the TLS/TCP relay candidate at the RFC 8445 minimum
+                     * priority: both agents then order every UDP relay pair
+                     * ahead of it and it wins only when the flaky UDP Allocate
+                     * produced no relay.  (This gather loop is where relay
+                     * candidates are actually added for both transports.) */
+                    if( ( iceResult == ICE_RESULT_OK ) &&
+                        ( pCtx->iceServers[ i ].serverType == ICE_CONTROLLER_ICE_SERVER_TYPE_TURNS ) &&
+                        ( pCtx->iceServers[ i ].protocol == ICE_SOCKET_PROTOCOL_TCP ) &&
+                        ( pCtx->iceContext.numLocalCandidates > 0 ) )
+                    {
+                        IceCandidate_t * pNewCandidate =
+                            &( pCtx->iceContext.pLocalCandidates[ pCtx->iceContext.numLocalCandidates - 1 ] );
+
+                        if( pNewCandidate->candidateType == ICE_CANDIDATE_TYPE_RELAY )
+                        {
+                            pNewCandidate->priority = 255U;
+                            icn_raw_puts( "[icn] tcp-relay priority demoted\r\n" );
+                        }
+                    }
+
                     xSemaphoreGive( pCtx->iceMutex );
                     icn_raw_puts( "[icn] relay addCand<r=" );
                     icn_raw_dec( ( int ) iceResult );
