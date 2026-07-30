@@ -1455,6 +1455,8 @@ static BaseType_t prvPublishDemoTelemetry( void )
 
     ( void ) iotcl_telemetry_set_string( xMessage, "mode", "demo" );
     ( void ) iotcl_telemetry_set_string( xMessage, "firmware_version", IOTCONNECT_APP_VERSION );
+    /* Same value under the n6uvc-demo attribute name, for reused dashboards. */
+    ( void ) iotcl_telemetry_set_string( xMessage, "version", IOTCONNECT_APP_VERSION );
     ( void ) iotcl_telemetry_set_bool( xMessage, "led_red", xIoTConnectRuntime.xLedRedOn == pdTRUE );
     ( void ) iotcl_telemetry_set_bool( xMessage, "led_green", xIoTConnectRuntime.xLedGreenOn == pdTRUE );
     ( void ) iotcl_telemetry_set_bool( xMessage, "button_user", xIoTConnectRuntime.xButtonPressed == pdTRUE );
@@ -1471,6 +1473,85 @@ static BaseType_t prvPublishDemoTelemetry( void )
             ( void ) iotcl_telemetry_set_number( xMessage, "ai_people", ( double ) lDetections );
             ( void ) iotcl_telemetry_set_number( xMessage, "ai_top_conf", ( double ) ulTopConfPct );
             ( void ) iotcl_telemetry_set_number( xMessage, "ai_infer_ms", ( double ) ulInferMs );
+
+            /* n6uvc-demo-compatible attributes, so dashboards built for ST's
+             * STM32N6 UVC demo (template "n6uvc") bind to this device
+             * unchanged.  That firmware reports ONE detection as a clamped
+             * pixel corner box in its 1280x720 VENC frame, conf as a
+             * truncated percent (0..100), and zeroes box fields while
+             * nothing is detected.  Our boxes are normalized (0..1) YOLO
+             * center/size, so map them onto the same VIRTUAL 1280x720 space
+             * to keep widget scales identical (e.g. the demo dashboard's
+             * box_area distance zones at 200k/400k/600k px^2).  Deliberate
+             * difference: we report the highest-confidence detection, not
+             * the first in postprocess order.  x_center/y_center stay
+             * normalized (0..1) per that demo's documented usage.
+             *
+             * The whole n6uvc record (count INCLUDED) derives from the one
+             * AiDetection_GetBoxes() snapshot, which is copied under a
+             * single critical section: nb_detect therefore always agrees
+             * with the box fields in the same message (boxes nonzero <=>
+             * nb_detect > 0), even though the ai_* scalars above come from
+             * a separately-updated snapshot.  Cost: nb_detect caps at
+             * LCD_PREVIEW_MAX_BOXES (8) while ai_people runs to 10. */
+            {
+                LcdBox_t xBoxes[ LCD_PREVIEW_MAX_BOXES ];
+                uint32_t ulBoxCount = AiDetection_GetBoxes( xBoxes, LCD_PREVIEW_MAX_BOXES );
+                double dBoxX = 0.0, dBoxY = 0.0, dBoxW = 0.0, dBoxH = 0.0;
+                double dConf = 0.0, dXCenter = 0.0, dYCenter = 0.0;
+
+                if( ulBoxCount > 0U )
+                {
+                    uint32_t ulTop = 0U, ulI;
+                    int32_t lX0, lY0, lX1, lY1;
+                    const LcdBox_t * pxTop;
+
+                    for( ulI = 1U; ulI < ulBoxCount; ulI++ )
+                    {
+                        if( xBoxes[ ulI ].fConf > xBoxes[ ulTop ].fConf )
+                        {
+                            ulTop = ulI;
+                        }
+                    }
+
+                    pxTop = &xBoxes[ ulTop ];
+
+                    /* YOLO center/size -> clamped pixel corner box (UVC-demo math). */
+                    lX0 = ( int32_t ) ( ( pxTop->fXCenter - pxTop->fWidth / 2.0f ) * 1280.0f );
+                    lY0 = ( int32_t ) ( ( pxTop->fYCenter - pxTop->fHeight / 2.0f ) * 720.0f );
+                    lX1 = ( int32_t ) ( ( pxTop->fXCenter + pxTop->fWidth / 2.0f ) * 1280.0f );
+                    lY1 = ( int32_t ) ( ( pxTop->fYCenter + pxTop->fHeight / 2.0f ) * 720.0f );
+
+                    if( lX0 < 0 ) { lX0 = 0; }
+                    if( lX0 > 1279 ) { lX0 = 1279; }
+                    if( lY0 < 0 ) { lY0 = 0; }
+                    if( lY0 > 719 ) { lY0 = 719; }
+                    if( lX1 < lX0 ) { lX1 = lX0; }
+                    if( lX1 > 1279 ) { lX1 = 1279; }
+                    if( lY1 < lY0 ) { lY1 = lY0; }
+                    if( lY1 > 719 ) { lY1 = 719; }
+
+                    dBoxX = ( double ) lX0;
+                    dBoxY = ( double ) lY0;
+                    dBoxW = ( double ) ( lX1 - lX0 );
+                    dBoxH = ( double ) ( lY1 - lY0 );
+                    dConf = ( double ) ( uint32_t ) ( pxTop->fConf * 100.0f );
+                    dXCenter = ( double ) pxTop->fXCenter;
+                    dYCenter = ( double ) pxTop->fYCenter;
+                }
+
+                ( void ) iotcl_telemetry_set_number( xMessage, "nb_detect", ( double ) ulBoxCount );
+                ( void ) iotcl_telemetry_set_number( xMessage, "box_x", dBoxX );
+                ( void ) iotcl_telemetry_set_number( xMessage, "box_y", dBoxY );
+                ( void ) iotcl_telemetry_set_number( xMessage, "box_w", dBoxW );
+                ( void ) iotcl_telemetry_set_number( xMessage, "box_h", dBoxH );
+                ( void ) iotcl_telemetry_set_number( xMessage, "box_area", dBoxW * dBoxH );
+                ( void ) iotcl_telemetry_set_number( xMessage, "conf", dConf );
+                ( void ) iotcl_telemetry_set_number( xMessage, "x_center", dXCenter );
+                ( void ) iotcl_telemetry_set_number( xMessage, "y_center", dYCenter );
+                ( void ) iotcl_telemetry_set_number( xMessage, "width", 1280.0 );
+                ( void ) iotcl_telemetry_set_number( xMessage, "height", 720.0 );
+            }
         }
     }
 

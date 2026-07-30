@@ -76,6 +76,12 @@ Also needed:
 
 - Two USB cables (one for the NUCLEO host board's ST-LINK port, one for the STM32N6570-DK's ST-LINK port)
 - An [IOTCONNECT account](https://iotconnect.io/) (a free trial is available)
+- A network that **passes outbound UDP** — WebRTC's TURN relay uses **UDP port 443**, and many
+  routers/firewalls silently drop it via "QUIC blocking" or advanced-security features (often
+  alongside NTP/UDP-123 interception). On such networks the Wi-Fi build falls back to a TCP relay
+  that can stall mid-stream. Symptoms, log diagnosis, and router fixes are in
+  [docs/troubleshooting.md](docs/troubleshooting.md#wi-fi-streaming-freezes-or-stalls-mid-session-router-udp-port-filtering);
+  the wired Ethernet image is unaffected.
 
 > [!NOTE]
 > You only need the X-NUCLEO + NUCLEO pairing for **Step 1** (flashing the Wi-Fi module). Once that's done, everything

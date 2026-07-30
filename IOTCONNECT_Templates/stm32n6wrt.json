@@ -1,163 +1,302 @@
 {
-    "code": "stm32n6wr2",
-    "name": "STM32N6 W6X KVS WebRTC 2",
-    "authType": 2,
-    "attributes": [
-        {
-            "name": "mode",
-            "displayName": "Application Mode",
-            "type": "STRING",
-            "description": "Firmware-reported demo mode identifier.",
-            "unit": "",
-            "attributeColor": "",
-            "aggregateTypes": []
-        },
-        {
-            "name": "firmware_version",
-            "displayName": "Firmware Version",
-            "type": "STRING",
-            "description": "Application firmware version reported by the device.",
-            "unit": "",
-            "attributeColor": "",
-            "aggregateTypes": []
-        },
-        {
-            "name": "led_red",
-            "displayName": "Red LED State",
-            "type": "BOOLEAN",
-            "description": "Current red LED state.",
-            "unit": "",
-            "attributeColor": "",
-            "aggregateTypes": []
-        },
-        {
-            "name": "led_green",
-            "displayName": "Green LED State",
-            "type": "BOOLEAN",
-            "description": "Current green LED state.",
-            "unit": "",
-            "attributeColor": "",
-            "aggregateTypes": []
-        },
-        {
-            "name": "button_user",
-            "displayName": "User Button State",
-            "type": "BOOLEAN",
-            "description": "Current user button state.",
-            "unit": "",
-            "attributeColor": "",
-            "aggregateTypes": []
-        },
-        {
-            "name": "version",
-            "displayName": "Version",
-            "type": "STRING",
-            "description": "Version string reported in sample mode.",
-            "unit": "",
-            "attributeColor": "",
-            "aggregateTypes": []
-        },
-        {
-            "name": "ai_people",
-            "displayName": "AI People Count",
-            "type": "NUMBER",
-            "description": "Number of people detected by the on-device NPU (YOLOv2, latest inference).",
-            "unit": "",
-            "attributeColor": "",
-            "aggregateTypes": []
-        },
-        {
-            "name": "ai_top_conf",
-            "displayName": "AI Top Confidence",
-            "type": "NUMBER",
-            "description": "Highest detection confidence of the latest inference, percent.",
-            "unit": "%",
-            "attributeColor": "",
-            "aggregateTypes": []
-        },
-        {
-            "name": "ai_infer_ms",
-            "displayName": "AI Inference Time",
-            "type": "NUMBER",
-            "description": "Duration of the latest NPU inference in milliseconds.",
-            "unit": "ms",
-            "attributeColor": "",
-            "aggregateTypes": []
-        }
-    ],
-    "commands": [
-        {
-            "name": "Turn All LEDs Off",
-            "command": "LED_ALL_OFF",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        },
-        {
-            "name": "Turn Red LED Off",
-            "command": "LED_RED_OFF",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        },
-        {
-            "name": "Turn Red LED On",
-            "command": "LED_RED_ON",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        },
-        {
-            "name": "Turn Green LED On",
-            "command": "LED_GREEN_ON",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        },
-        {
-            "name": "Turn Green LED Off",
-            "command": "LED_GREEN_OFF",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        },
-        {
-            "name": "Turn All LEDs On",
-            "command": "LED_ALL_ON",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        },
-        {
-            "name": "Turn LCD Preview On",
-            "command": "LCD_ON",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        },
-        {
-            "name": "Turn LCD Preview Off",
-            "command": "LCD_OFF",
-            "requiredParam": false,
-            "requiredAck": true,
-            "isOTACommand": false
-        }
-    ],
-    "messageVersion": "2.1",
-    "msgCode": "XG4EGET",
-    "capability": "0",
-    "c2dOnDemand": 0,
-    "properties": {
-        "description": "STM32N6 W6X IoT reference with KVS WebRTC video streaming.",
-        "dataFrequency": "5",
-        "fileSupport": false,
-        "videoStreamResource": "2",
-        "videoStreamType": "3",
-        "autoStartVideoStream": false,
-        "certRenewalDay": 0,
-        "enableCSR": false
-    },
-    "_meta": {
-        "version": "2.0"
-    }
+    "code":  "stm32n6wr2",
+    "name":  "STM32N6 W6X KVS WebRTC 2",
+    "authType":  2,
+    "attributes":  [
+                       {
+                           "name":  "mode",
+                           "displayName":  "Application Mode",
+                           "type":  "STRING",
+                           "description":  "Firmware-reported demo mode identifier.",
+                           "unit":  "",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "firmware_version",
+                           "displayName":  "Firmware Version",
+                           "type":  "STRING",
+                           "description":  "Application firmware version reported by the device.",
+                           "unit":  "",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "led_red",
+                           "displayName":  "Red LED State",
+                           "type":  "BOOLEAN",
+                           "description":  "Current red LED state.",
+                           "unit":  "",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "led_green",
+                           "displayName":  "Green LED State",
+                           "type":  "BOOLEAN",
+                           "description":  "Current green LED state.",
+                           "unit":  "",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "button_user",
+                           "displayName":  "User Button State",
+                           "type":  "BOOLEAN",
+                           "description":  "Current user button state.",
+                           "unit":  "",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "version",
+                           "displayName":  "Version",
+                           "type":  "STRING",
+                           "description":  "Firmware version string (published in demo and sample modes; n6uvc-dashboard-compatible name).",
+                           "unit":  "",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "ai_people",
+                           "displayName":  "AI People Count",
+                           "type":  "INTEGER",
+                           "description":  "Number of people detected by the on-device NPU (YOLOv2, latest inference).",
+                           "unit":  "",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "ai_top_conf",
+                           "displayName":  "AI Top Confidence",
+                           "type":  "INTEGER",
+                           "description":  "Highest detection confidence of the latest inference, percent.",
+                           "unit":  "%",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "ai_infer_ms",
+                           "displayName":  "AI Inference Time",
+                           "type":  "DECIMAL",
+                           "description":  "Duration of the latest NPU inference in milliseconds.",
+                           "unit":  "ms",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "nb_detect",
+                           "displayName":  "Detections (n6uvc)",
+                           "type":  "INTEGER",
+                           "description":  "Detections in the reported box snapshot (max 8), always consistent with box_* in the same message; ai_people is the uncapped count.",
+                           "unit":  "",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "conf",
+                           "displayName":  "Confidence (n6uvc)",
+                           "type":  "INTEGER",
+                           "description":  "Top-detection confidence, truncated percent 0..100 (n6uvc-dashboard-compatible).",
+                           "unit":  "",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "box_x",
+                           "displayName":  "Box X (n6uvc)",
+                           "type":  "INTEGER",
+                           "description":  "Top-detection box left edge, pixels in a virtual 1280x720 frame (n6uvc scale).",
+                           "unit":  "px",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "box_y",
+                           "displayName":  "Box Y (n6uvc)",
+                           "type":  "INTEGER",
+                           "description":  "Top-detection box top edge, pixels in a virtual 1280x720 frame (n6uvc scale).",
+                           "unit":  "px",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "box_w",
+                           "displayName":  "Box Width (n6uvc)",
+                           "type":  "INTEGER",
+                           "description":  "Top-detection box width, pixels in a virtual 1280x720 frame (n6uvc scale).",
+                           "unit":  "px",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "box_h",
+                           "displayName":  "Box Height (n6uvc)",
+                           "type":  "INTEGER",
+                           "description":  "Top-detection box height, pixels in a virtual 1280x720 frame (n6uvc scale).",
+                           "unit":  "px",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "box_area",
+                           "displayName":  "Box Area (n6uvc)",
+                           "type":  "INTEGER",
+                           "description":  "box_w * box_h in px^2 of the virtual 1280x720 frame; drives n6uvc distance widgets (zones ~200k/400k/600k).",
+                           "unit":  "px^2",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "x_center",
+                           "displayName":  "Box X Center (n6uvc)",
+                           "type":  "DECIMAL",
+                           "description":  "Top-detection box center X, normalized 0..1.",
+                           "unit":  "",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "y_center",
+                           "displayName":  "Box Y Center (n6uvc)",
+                           "type":  "DECIMAL",
+                           "description":  "Top-detection box center Y, normalized 0..1.",
+                           "unit":  "",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "width",
+                           "displayName":  "Frame Width (n6uvc)",
+                           "type":  "INTEGER",
+                           "description":  "Width of the virtual coordinate frame box_* values are expressed in (constant 1280).",
+                           "unit":  "px",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       },
+                       {
+                           "name":  "height",
+                           "displayName":  "Frame Height (n6uvc)",
+                           "type":  "INTEGER",
+                           "description":  "Height of the virtual coordinate frame box_* values are expressed in (constant 720).",
+                           "unit":  "px",
+                           "attributeColor":  "",
+                           "aggregateTypes":  [
+
+                                              ]
+                       }
+                   ],
+    "commands":  [
+                     {
+                         "name":  "Turn All LEDs Off",
+                         "command":  "LED_ALL_OFF",
+                         "requiredParam":  false,
+                         "requiredAck":  true,
+                         "isOTACommand":  false
+                     },
+                     {
+                         "name":  "Turn Red LED Off",
+                         "command":  "LED_RED_OFF",
+                         "requiredParam":  false,
+                         "requiredAck":  true,
+                         "isOTACommand":  false
+                     },
+                     {
+                         "name":  "Turn Red LED On",
+                         "command":  "LED_RED_ON",
+                         "requiredParam":  false,
+                         "requiredAck":  true,
+                         "isOTACommand":  false
+                     },
+                     {
+                         "name":  "Turn Green LED On",
+                         "command":  "LED_GREEN_ON",
+                         "requiredParam":  false,
+                         "requiredAck":  true,
+                         "isOTACommand":  false
+                     },
+                     {
+                         "name":  "Turn Green LED Off",
+                         "command":  "LED_GREEN_OFF",
+                         "requiredParam":  false,
+                         "requiredAck":  true,
+                         "isOTACommand":  false
+                     },
+                     {
+                         "name":  "Turn All LEDs On",
+                         "command":  "LED_ALL_ON",
+                         "requiredParam":  false,
+                         "requiredAck":  true,
+                         "isOTACommand":  false
+                     },
+                     {
+                         "name":  "Turn LCD Preview On",
+                         "command":  "LCD_ON",
+                         "requiredParam":  false,
+                         "requiredAck":  true,
+                         "isOTACommand":  false
+                     },
+                     {
+                         "name":  "Turn LCD Preview Off",
+                         "command":  "LCD_OFF",
+                         "requiredParam":  false,
+                         "requiredAck":  true,
+                         "isOTACommand":  false
+                     }
+                 ],
+    "messageVersion":  "2.1",
+    "msgCode":  "XG4EGET",
+    "capability":  "0",
+    "c2dOnDemand":  0,
+    "properties":  {
+                       "description":  "STM32N6 W6X IoT reference with KVS WebRTC video streaming.",
+                       "dataFrequency":  "5",
+                       "fileSupport":  false,
+                       "videoStreamResource":  "2",
+                       "videoStreamType":  "3",
+                       "autoStartVideoStream":  false,
+                       "certRenewalDay":  0,
+                       "enableCSR":  false
+                   },
+    "_meta":  {
+                  "version":  "2.0"
+              }
 }

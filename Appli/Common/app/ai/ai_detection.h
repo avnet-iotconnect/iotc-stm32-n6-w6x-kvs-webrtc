@@ -60,7 +60,7 @@ uint32_t AiDetection_GetBoxes( LcdBox_t * pxBoxes, uint32_t ulMax );
 #define AiDetection_SubmitNV12( y, uv, w, h )  do { ( void ) ( y ); ( void ) ( uv ); ( void ) ( w ); ( void ) ( h ); } while( 0 )
 #define AiDetection_FrameDoneISR()            do {} while( 0 )
 #define AiDetection_GetTelemetry( d, c, m, n )    ( ( uint8_t ) 0U )
-#define AiDetection_GetBoxes( b, n )              ( ( uint32_t ) 0U )
+#define AiDetection_GetBoxes( b, n )              ( ( void ) ( b ), ( void ) ( n ), ( uint32_t ) 0U )
 
 #endif /* ENABLE_AI_DETECTION */
 
