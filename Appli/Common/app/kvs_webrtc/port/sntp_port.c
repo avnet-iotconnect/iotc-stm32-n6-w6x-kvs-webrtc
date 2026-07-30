@@ -24,6 +24,7 @@
 
 #include "lwip/sockets.h"
 #include "lwip/netdb.h"
+#include "lwip/netif.h"
 
 /* Provided by syscalls.c */
 extern void _settimeofday_epoch( uint32_t sec, uint32_t usec );
@@ -82,7 +83,12 @@ static void ntp_raw_int( int v )
     while( di-- ) ntp_raw_putc( dbuf[di] );
 }
 
-static int prvNtpQuery( const char * pcServer )
+/* @param ulAddrBe  When nonzero: query this IPv4 address (network byte
+ *                  order) directly, skipping DNS.  Used for the gateway-
+ *                  first attempt (routers that intercept WAN NTP usually
+ *                  answer port 123 themselves). */
+static int prvNtpQuery( const char * pcServer,
+                        uint32_t ulAddrBe )
 {
     struct sockaddr_in xAddr;
     int               fd = -1;
@@ -94,8 +100,16 @@ static int prvNtpQuery( const char * pcServer )
     ntp_raw_puts( pcServer );
     ntp_raw_puts( "\r\n" );
 
-    /* Use lwIP DNS to resolve hostname to IP address */
+    if( ulAddrBe != 0U )
     {
+        memset( &xAddr, 0, sizeof( xAddr ) );
+        xAddr.sin_family      = AF_INET;
+        xAddr.sin_port        = lwip_htons( NTP_PORT );
+        xAddr.sin_addr.s_addr = ulAddrBe;
+    }
+    else
+    {
+        /* Use lwIP DNS to resolve hostname to IP address */
         struct addrinfo hints, *res = NULL;
         memset( &hints, 0, sizeof( hints ) );
         hints.ai_family   = AF_INET;
@@ -453,11 +467,26 @@ void sntp_init( void )
 
     ntp_raw_puts( "[NTP] sntp_init start\r\n" );
 
+    /* Gateway first: LANs whose router intercepts client NTP to public
+     * servers (Google Wifi/Nest — see docs/w6x_module_notes.md §1 note)
+     * still answer NTP at the gateway itself.  Fast-fails elsewhere. */
+    if( netif_default != NULL )
+    {
+        uint32_t ulGw = ip4_addr_get_u32( netif_ip4_gw( netif_default ) );
+
+        vPetWatchdog();
+
+        if( ( ulGw != 0U ) && ( prvNtpQuery( "gateway", ulGw ) == 0 ) )
+        {
+            return;   /* success */
+        }
+    }
+
     /* Try NTP first (single round — fast-fail if UDP port 123 is blocked) */
     for( i = 0; i < (int)NTP_SERVER_COUNT; i++ )
     {
         vPetWatchdog();
-        if( prvNtpQuery( ppcNtpServers[i] ) == 0 )
+        if( prvNtpQuery( ppcNtpServers[i], 0U ) == 0 )
             return;   /* success */
     }
 
