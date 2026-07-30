@@ -84,3 +84,52 @@ Check:
 2. The IOTCONNECT device template has **Video Streaming** enabled.
 3. Serial log shows `[KVSWebRTC]` lines — if missing, the KVS task did not start.
 4. If using an external 5V supply, ensure it is stable. USB power from ST-LINK alone can cause brownouts during streaming.
+
+## Wi-Fi Streaming Freezes or Stalls Mid-Session (Router UDP Port Filtering)
+
+**Symptom:** On the Wi-Fi build, viewer sessions connect but the video freezes
+after ~20-90 s with `[TLS] snd stall ... e=11` then `GATE CLOSE` in the serial
+log, and boot-time NTP always falls back to HTTP (`[NTP] select timeout` for
+every server, then `[HTTP] time set OK`). Streaming on the same firmware works
+perfectly on other networks.
+
+**Diagnosis (read it straight off the serial log):** during ICE gathering the
+one-shot `[icn] relay ...` markers show what each TURN server did:
+
+```
+[icn] relay[1] ... proto=2 ... [icn] relay CREATED proto=2    <- TLS/TCP relay OK
+[icn] relay[2] ... proto=1 ... [icn] relay IN_PROGRESS proto=1  <- UDP relay Allocate never answered
+[icn] tcp-relay priority demoted
+```
+
+If the UDP relay (`proto=1`) never reaches `CREATED`, every session is forced
+onto the TLS/TCP relay — whose media path can wedge under sustained load (the
+known W6X TCP-TX stall, `docs/w6x_module_notes.md`). Compare the UDP ports the
+network passes: DNS (UDP/53) resolves fine, NTP (UDP/123) gets no reply, and
+the KVS TURN Allocate (UDP/443) gets no reply. That pattern is **router policy,
+not firmware**: many routers/firewalls ship "QUIC blocking" or advanced-security
+features that silently drop outbound UDP/443, and commonly intercept client NTP
+(UDP/123) as well.
+
+**What to do:**
+
+1. **Fix the router (preferred).** In the router's security settings disable
+   QUIC/UDP-443 blocking (or exempt the device's MAC/IP), and allow outbound
+   NTP. Names vary: "QUIC filtering", "advanced security", "protected
+   browsing", "UDP flood protection".
+2. **Confirm it's the network** by booting the same firmware on a different
+   LAN or hotspot: `[icn] relay CREATED proto=1` should appear and sessions
+   run stall-free on the UDP relay (validated 127 s+, zero TLS stalls).
+3. **Use the wired Ethernet image** (`bin/quickstart/...-ethernet.hex`) — its
+   TCP path does not have the W6X TX stall, so it streams reliably even behind
+   a filtering router. Credentials are preserved when swapping images.
+4. **NTP-only relief:** the firmware already falls back to HTTP time (works
+   everywhere, ~10 s slower boot). You can also point NTP elsewhere without
+   reflashing: `conf set ntp_host <server>` / `conf set ntp_port <port>` at
+   the CLI, stored in littlefs.
+
+Even when stuck on the TLS/TCP relay the firmware self-heals: a wedged session
+is torn down via the ICE close-timeout and the next viewer connect retries.
+The TCP relay candidate is advertised at minimum ICE priority, so the moment
+the network lets the UDP Allocate through, sessions automatically prefer the
+reliable UDP relay.
