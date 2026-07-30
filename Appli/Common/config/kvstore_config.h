@@ -124,7 +124,9 @@
     CS_KVS_IOT_THING_NAME,      /* IoT Thing Name for KVS     */ \
     CS_KVS_IOT_ROLE_ALIAS,      /* IoT Role Alias for KVS     */ \
     CS_KVS_IOT_THING_CERT,      /* IoT Device Certificate PEM */ \
-    CS_KVS_IOT_PRIVATE_KEY      /* IoT Device Private Key PEM */
+    CS_KVS_IOT_PRIVATE_KEY,     /* IoT Device Private Key PEM */ \
+    CS_NTP_HOST,                /* NTP override host ("" = default list) */ \
+    CS_NTP_PORT                 /* NTP UDP port (default 123)  */
 
 /* Platform-specific keys */
 #if defined(ST67W6X_NCP)
@@ -199,7 +201,9 @@ typedef enum KvStoreEnum
     "kvs_iot_thing_name",       /* IoT Thing Name for KVS      */ \
     "kvs_role_alias",           /* IoT Role Alias for KVS      */ \
     "kvs_iot_cert",             /* IoT Device Certificate PEM  */ \
-    "kvs_iot_key"               /* IoT Device Private Key PEM  */
+    "kvs_iot_key",              /* IoT Device Private Key PEM  */ \
+    "ntp_host",                 /* NTP override host           */ \
+    "ntp_port"                  /* NTP UDP port                */
 
 /* Platform-specific strings */
 #if defined(ST67W6X_NCP)
@@ -295,7 +299,9 @@ typedef enum KvStoreEnum
     KV_DFLT(KV_TYPE_STRING, ""),  /* Default IoT Thing Name          */                   \
     KV_DFLT(KV_TYPE_STRING, ""),  /* Default IoT Role Alias          */                   \
     KV_DFLT(KV_TYPE_STRING, ""),  /* Default IoT Device Certificate  */                   \
-    KV_DFLT(KV_TYPE_STRING, "")   /* Default IoT Device Private Key  */
+    KV_DFLT(KV_TYPE_STRING, ""),  /* Default IoT Device Private Key  */                   \
+    KV_DFLT(KV_TYPE_STRING, ""),  /* Default NTP override host (none) */                  \
+    KV_DFLT(KV_TYPE_UINT32, 123)  /* Default NTP UDP port             */
 
 /* Defaults for ST67W6X_NCP platform */
 #if defined(ST67W6X_NCP)

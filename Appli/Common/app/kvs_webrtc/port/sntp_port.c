@@ -26,6 +26,8 @@
 #include "lwip/netdb.h"
 #include "lwip/netif.h"
 
+#include "kvstore.h"    /* CS_NTP_HOST / CS_NTP_PORT overrides */
+
 /* Provided by syscalls.c */
 extern void _settimeofday_epoch( uint32_t sec, uint32_t usec );
 
@@ -86,9 +88,12 @@ static void ntp_raw_int( int v )
 /* @param ulAddrBe  When nonzero: query this IPv4 address (network byte
  *                  order) directly, skipping DNS.  Used for the gateway-
  *                  first attempt (routers that intercept WAN NTP usually
- *                  answer port 123 themselves). */
+ *                  answer port 123 themselves).
+ * @param usPort    Destination UDP port (123 unless the persisted
+ *                  "ntp_port" conf key overrides it). */
 static int prvNtpQuery( const char * pcServer,
-                        uint32_t ulAddrBe )
+                        uint32_t ulAddrBe,
+                        uint16_t usPort )
 {
     struct sockaddr_in xAddr;
     int               fd = -1;
@@ -104,7 +109,6 @@ static int prvNtpQuery( const char * pcServer,
     {
         memset( &xAddr, 0, sizeof( xAddr ) );
         xAddr.sin_family      = AF_INET;
-        xAddr.sin_port        = lwip_htons( NTP_PORT );
         xAddr.sin_addr.s_addr = ulAddrBe;
     }
     else
@@ -125,6 +129,11 @@ static int prvNtpQuery( const char * pcServer,
         memcpy( &xAddr, res->ai_addr, sizeof( xAddr ) );
         lwip_freeaddrinfo( res );
     }
+
+    xAddr.sin_port = lwip_htons( usPort );
+    ntp_raw_puts( "[NTP] port " );
+    ntp_raw_int( ( int ) usPort );
+    ntp_raw_puts( "\r\n" );
 
     fd = lwip_socket( AF_INET, SOCK_DGRAM, IPPROTO_UDP );
     if( fd < 0 )
@@ -465,9 +474,47 @@ void sntp_init( void )
 {
     int i;
 
+    uint16_t usPort = NTP_PORT;
+
     ntp_raw_puts( "[NTP] sntp_init start\r\n" );
 
-    /* Gateway first: LANs whose router intercepts client NTP to public
+    /* Persisted overrides (CLI: `conf set ntp_port 98`, `conf set
+     * ntp_host my.server`) so the working NTP setup for a given LAN never
+     * has to live only in a binary again. */
+    {
+        BaseType_t xFound = pdFALSE;
+        uint32_t   ulConfPort = KVStore_getUInt32( CS_NTP_PORT, &xFound );
+
+        if( ( xFound == pdTRUE ) && ( ulConfPort > 0U ) && ( ulConfPort < 65536U ) )
+        {
+            usPort = ( uint16_t ) ulConfPort;
+        }
+    }
+
+    {
+        size_t xLen    = 0;
+        char * pcHost  = KVStore_getStringHeap( CS_NTP_HOST, &xLen );
+
+        if( ( pcHost != NULL ) && ( xLen > 0 ) && ( pcHost[ 0 ] != '\0' ) )
+        {
+            int lHostRet;
+
+            vPetWatchdog();
+            lHostRet = prvNtpQuery( pcHost, 0U, usPort );
+            vPortFree( pcHost );
+
+            if( lHostRet == 0 )
+            {
+                return;   /* success */
+            }
+        }
+        else if( pcHost != NULL )
+        {
+            vPortFree( pcHost );
+        }
+    }
+
+    /* Gateway next: LANs whose router intercepts client NTP to public
      * servers (Google Wifi/Nest — see docs/w6x_module_notes.md §1 note)
      * still answer NTP at the gateway itself.  Fast-fails elsewhere. */
     if( netif_default != NULL )
@@ -476,7 +523,7 @@ void sntp_init( void )
 
         vPetWatchdog();
 
-        if( ( ulGw != 0U ) && ( prvNtpQuery( "gateway", ulGw ) == 0 ) )
+        if( ( ulGw != 0U ) && ( prvNtpQuery( "gateway", ulGw, usPort ) == 0 ) )
         {
             return;   /* success */
         }
@@ -486,7 +533,7 @@ void sntp_init( void )
     for( i = 0; i < (int)NTP_SERVER_COUNT; i++ )
     {
         vPetWatchdog();
-        if( prvNtpQuery( ppcNtpServers[i], 0U ) == 0 )
+        if( prvNtpQuery( ppcNtpServers[i], 0U, usPort ) == 0 )
             return;   /* success */
     }
 
