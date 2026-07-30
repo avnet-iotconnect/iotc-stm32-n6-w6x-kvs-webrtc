@@ -1654,6 +1654,30 @@ IceControllerResult_t IceControllerNet_ExecuteTlsHandshake( IceControllerContext
                                                    pSocketContext->pIceServer->userNameLength,
                                                    &( pSocketContext->pIceServer->password[ 0 ] ),
                                                    pSocketContext->pIceServer->passwordLength );
+
+                /* docs/w6x_module_notes.md ("Attempted + REVERTED"): keep the
+                 * TLS/TCP relay — its Allocate is the only reliable one — but
+                 * bias nomination toward the UDP relay, because the W6X
+                 * TCP-TX path wedges under media load once nominated
+                 * ([TLS] snd stall -> GATE CLOSE).  This function is the
+                 * TLS/TCP TURN connect path (TLS_TRANSPORT_SUCCESS above), so
+                 * the candidate just added is the TCP relay: advertise it at
+                 * the RFC 8445 minimum priority.  Both agents then order
+                 * every UDP relay pair ahead of it, and it wins nomination
+                 * only when the flaky UDP Allocate produced no relay. */
+                if( ( iceResult == ICE_RESULT_OK ) &&
+                    ( pCtx->iceContext.numLocalCandidates > 0 ) )
+                {
+                    IceCandidate_t * pNewCandidate =
+                        &( pCtx->iceContext.pLocalCandidates[ pCtx->iceContext.numLocalCandidates - 1 ] );
+
+                    if( pNewCandidate->candidateType == ICE_CANDIDATE_TYPE_RELAY )
+                    {
+                        pNewCandidate->priority = 255U;
+                        icn_raw_puts( "[icn] tcp-relay priority demoted\r\n" );
+                    }
+                }
+
                 if( isIceLockTakenBeforeCall == 0U )
                 {
                     xSemaphoreGive( pCtx->iceMutex );

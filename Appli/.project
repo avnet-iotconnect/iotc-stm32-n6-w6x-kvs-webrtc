@@ -7,7 +7,7 @@
 	<buildSpec>
 		<buildCommand>
 			<name>org.eclipse.cdt.managedbuilder.core.genmakebuilder</name>
-			<triggers>full,incremental,</triggers>
+			<triggers>clean,full,incremental,</triggers>
 			<arguments>
 			</arguments>
 		</buildCommand>
@@ -58,6 +58,11 @@
 			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_dcmipp.c</name>
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_dcmipp.c</locationURI>
+		</link>
+		<link>
+			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_ltdc.c</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_ltdc.c</locationURI>
 		</link>
 		<link>
 			<name>Drivers/STM32N6xx_HAL_Driver/stm32n6xx_hal_dma.c</name>
