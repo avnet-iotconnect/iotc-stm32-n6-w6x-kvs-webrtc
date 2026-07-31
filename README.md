@@ -2,6 +2,19 @@
 
 <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-stm32-n6-demos/main/media/n6.jpg" alt="STM32N6570-DK" width="500"/>
 
+1. [Introduction](#1-introduction)
+2. [Prerequisites](#2-prerequisites)
+3. [Connecting the Camera](#3-connecting-the-camera)
+4. [Cloud Account Setup](#4-cloud-account-setup)
+5. [Program the STM32N6570-DK](#5-program-the-stm32n6570-dk)
+6. [Wi-Fi Variant Only: Update the Wi-Fi Module Firmware](#6-wi-fi-variant-only-update-the-wi-fi-module-firmware)
+7. [Import the Device Template in /IOTCONNECT](#7-import-the-device-template-in-iotconnect)
+8. [Configure the Device](#8-configure-the-device)
+9. [Set USB Power Source](#9-set-usb-power-source)
+10. [Using the Demo](#10-using-the-demo)
+11. [Going Further: Custom Development](#11-going-further-custom-development)
+12. [Resources](#12-resources)
+
 ## 1. Introduction
 
 This guide will walk you through how to connect a STM32N6570-DK to /IOTCONNECT for:
@@ -13,6 +26,7 @@ This guide will walk you through how to connect a STM32N6570-DK to /IOTCONNECT f
 - **Cloud commands** — start/stop video, LCD preview on/off, LED control
 
 Two firmware variants are provided (see [Files to Download](#files-to-download)):
+
 * **Wi-Fi Version** using the ST67W611M1 Wi-Fi 6 module (X-NUCLEO)
 * **Ethernet Version** using the on-board Ethernet port
 
@@ -50,12 +64,14 @@ All steps work on Windows and Linux host machines. The only ST tool required is 
 
 ### Files to Download
 
-Download each of the following files by opening the provided link, then click the **Download raw file** button at the 
+Download each of the following files by opening the provided link, then click the **Download raw file** button at the
 top right of the file viewing window:
 
 1. Your firmware variant pre-compiled hex code:
-* Wi-Fi: [bin/quickstart/stm32n6570-dk-kvs-demo-wifi.hex](bin/quickstart/stm32n6570-dk-kvs-demo-wifi.hex)  
+
+* Wi-Fi: [bin/quickstart/stm32n6570-dk-kvs-demo-wifi.hex](bin/quickstart/stm32n6570-dk-kvs-demo-wifi.hex)
 * Ethernet: [bin/quickstart/stm32n6570-dk-kvs-demo-ethernet.hex](bin/quickstart/stm32n6570-dk-kvs-demo-ethernet.hex)
+
 2. The AI model: [bin/Model/network_data.hex](bin/Model/network_data.hex)
 3. The device template: [IOTCONNECT_Templates/stm32n6wrt.json](IOTCONNECT_Templates/stm32n6wrt.json)
 4. The config script for your host OS — [bin/device-config.ps1](bin/device-config.ps1) (Windows) or
@@ -64,12 +80,12 @@ top right of the file viewing window:
 ## 3. Connecting the Camera
 
 This demo is designed to utilize the included camera module for the KVS video streaming.
-Carefully connect the camera module to the `CAMERA` ribbon cable port of the STM32N6570-DK board 
+Carefully connect the camera module to the `CAMERA` ribbon cable port of the STM32N6570-DK board
 using the provided ribbon cable as shown below.
 
 <img src="./media/camera-connections.png" >
 
-Optionally, you can also mount the camera module to the board using the provided standoffs and bolts as 
+Optionally, you can also mount the camera module to the board using the provided standoffs and bolts as
 shown in the product image at the top of this document.
 
 ## 4. Cloud Account Setup
@@ -77,8 +93,11 @@ shown in the product image at the top of this document.
 An /IOTCONNECT account with an **AWS backend** is required. If you need to create an account, a
 **free trial subscription** is available — no credit card required:
 
-- Sign up: [https://subscription.iotconnect.io/subscribe?cloud=aws](https://subscription.iotconnect.io/subscribe?cloud=aws)
-  (see the [AWS Marketplace option](https://github.com/avnet-iotconnect/avnet-iotconnect.github.io/blob/main/documentation/iotconnect/subscription/iotconnect_aws_marketplace.md) if you prefer)
+- Sign
+  up: [https://subscription.iotconnect.io/subscribe?cloud=aws](https://subscription.iotconnect.io/subscribe?cloud=aws)
+  (see
+  the [AWS Marketplace option](https://github.com/avnet-iotconnect/avnet-iotconnect.github.io/blob/main/documentation/iotconnect/subscription/iotconnect_aws_marketplace.md)
+  if you prefer)
 - Log in: [https://console.iotconnect.io/login](https://console.iotconnect.io/login)
 
 > [!NOTE]
@@ -143,7 +162,7 @@ $P/STM32_Programmer_CLI -c port=SWD mode=HOTPLUG ap=1 -w stm32n6570-dk-kvs-demo-
 
 ### 5.3 Return Boot Switch to Run Mode
 
-Unplug the USB cable, set **both** BOOT switches to the **left**, then reconnect. 
+Unplug the USB cable, set **both** BOOT switches to the **left**, then reconnect.
 
 <img src="./media/flash-mode.png" >
 
@@ -162,7 +181,7 @@ This is a one-time update, done with a NUCLEO host board as the programmer:
    the NUCLEO's ST-LINK port.
 
 > [!NOTE]
-> The module's pins line up with the outermost pins of the NUCLEO host board, and should be plugged in 
+> The module's pins line up with the outermost pins of the NUCLEO host board, and should be plugged in
 > at the top of rows.
 
 <img src="./media/nucleo-pins.png" >
@@ -204,7 +223,7 @@ This is a one-time update, done with a NUCLEO host board as the programmer:
 
 ## 8. Configure the Device
 
-Using an automated script, the device generates its own key pair and certificate. 
+Using an automated script, the device generates its own key pair and certificate.
 Run the script for your host machine from wherever you saved it in Step 2.
 
 **Windows:**
@@ -223,12 +242,12 @@ python3 device-config.py
 ### Configuration Script Walkthrough
 
 1. The script auto-detects the board's serial port, reads the `thing_name` (and lets you keep or
-change it), generates the key pair and certificate on-device, then prints the certificate and
-pauses. 
+   change it), generates the key pair and certificate on-device, then prints the certificate and
+   pauses.
 
 Next you will jump over to /IOTCONNECT to create the device and paste this certificate into its configuration.
 
-2. After logging into your /IOTCONNECT account on [console.iotconnect.io](https://console.iotconnect.io), go to the 
+2. After logging into your /IOTCONNECT account on [console.iotconnect.io](https://console.iotconnect.io), go to the
    **Device** page and click **Create Device**:
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/create-device-button.png" width="600"/>
@@ -264,16 +283,38 @@ Next you will jump over to /IOTCONNECT to create the device and paste this certi
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/paper-and-cog.png" width="600"/>
 
-10. Open and then copy and paste the downloaded device configuration JSON back into the configuration script (end the paste
-with `ENDJSON` on its own line)
+10. Open and then copy and paste the downloaded device configuration JSON back into the configuration script (end the
+    paste
+    with `ENDJSON` on its own line)
 
 11. The script finishes by prompting for and writing the connection config and finally resetting the board.
 
 > [!NOTE]
-> For the Ethernet variant of the demo, the Wi-Fi values are ignored by the firmware so you can just click ENTER through 
+> For the Ethernet variant of the demo, the Wi-Fi values are ignored by the firmware so you can just click ENTER through
 > the Wi-Fi credential prompts.
 
-## 9. Using the Demo
+## 9. Set USB Power Source
+
+To support the LCD and AI power usage of this demo, the board needs to have its power source switched from the 5V_STLNK
+option to the 5V_USB_SNK option. The ST-LINK connection cannot provide the necessary amperage.
+
+To do this, on the underside of the board move the JP2 jumper from the top set of pins to the middle set of pins.
+
+<img src="./media/jumper-original.png" >
+
+<img src="./media/jumper-after.png" >
+
+From now on, the board will be powered via a second USB-C connection on the USB1 port to a 5V power supply that provides
+at least 2A.
+
+<img src="./media/usb-power.png" >
+
+> [!NOTE]
+> The ST-LINK USB connection can still be used for future flashing or serial communication , but will be physically
+> blocked by the Wi-Fi module's headers. For this reason it is recommended to remove the Wi-Fi module during flashing. 
+> Alternatively you could purchase GPIO pin extenders for the Wi-Fi module to have its headers clear the ST-LINK port.
+
+## 10. Using the Demo
 
 1. Watch the serial terminal: within ~60 seconds the device connects to /IOTCONNECT
    (`[IOTC]` log lines), and the board's **LCD lights up with the live camera preview** — people in
@@ -282,7 +323,7 @@ with `ENDJSON` on its own line)
    tab: telemetry arrives every few seconds, including the AI attributes:
 
    | Attribute     | Meaning                                          |
-      |---------------|--------------------------------------------------|
+         |---------------|--------------------------------------------------|
    | `ai_people`   | People detected in frame (NPU YOLOv2)            |
    | `ai_top_conf` | Highest detection confidence (%)                 |
    | `ai_infer_ms` | NPU inference time (ms)                          |
@@ -292,12 +333,12 @@ with `ENDJSON` on its own line)
 4. Try the cloud commands (**Command** tab): `LCD_ON` / `LCD_OFF` toggles the board's LCD preview;
    `LED_RED_ON`, `LED_GREEN_ON`, etc. control the user LEDs.
 
-## 10. Going Further: Custom Development
+## 11. Going Further: Custom Development
 
 Building from source, firmware architecture, security, the Wi-Fi/Ethernet transport internals, and
 troubleshooting all live in one place: **[developer.md](developer.md)** — the full developer guide.
 
-## 11. Resources
+## 12. Resources
 
 - [Full developer guide](developer.md) — building from source, architecture, security, troubleshooting
 - [/IOTCONNECT overview](https://www.iotconnect.io/) · [/IOTCONNECT documentation](https://docs.iotconnect.io/)

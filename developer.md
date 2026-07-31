@@ -11,8 +11,6 @@
 
 /IOTCONNECT reference firmware for the [STM32N6570-DK](https://www.st.com/en/evaluation-tools/stm32n6570-dk.html) with [ST67W611M1](https://www.st.com/content/st_com/en/campaigns/st67w-wifi6-bluetooth-thread-module-z13.html) Wi-Fi 6 module.
 
----
-
 1. [Additional Required Software](#additional-required-software)
 2. [Clone This Repository](#clone-this-repository)
 3. [Build Configurations](#build-configurations)
