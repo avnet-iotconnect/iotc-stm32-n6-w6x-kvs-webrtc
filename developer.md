@@ -1,6 +1,6 @@
 # STM32N6570-DK + ST67W611M1 + KVS WebRTC
 
-### IOTCONNECT Reference Firmware with Live Video Streaming
+### /IOTCONNECT Reference Firmware with Live Video Streaming
 
 [![Board: STM32N6570-DK](https://img.shields.io/badge/Board-STM32N6570--DK-03234B)](https://www.st.com/en/evaluation-tools/stm32n6570-dk.html)
 [![RTOS: FreeRTOS](https://img.shields.io/badge/RTOS-FreeRTOS-1A73E8)](https://www.freertos.org/)
@@ -9,100 +9,29 @@
 [![Wi-Fi: ST67W611M1](https://img.shields.io/badge/Wi--Fi-ST67W611M1-0B8043)](https://www.st.com/content/st_com/en/campaigns/st67w-wifi6-bluetooth-thread-module-z13.html)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE.md)
 
-IOTCONNECT reference firmware for the [STM32N6570-DK](https://www.st.com/en/evaluation-tools/stm32n6570-dk.html)
-with [ST67W611M1](https://www.st.com/content/st_com/en/campaigns/st67w-wifi6-bluetooth-thread-module-z13.html) Wi-Fi 6
-module.
-
-> [!TIP]
-> **🚀 New here? Start with the [QUICKSTART](README.md).** It takes you from nothing to a live
-> device — IOTCONNECT account, flashing **pre-built firmware** (Wi-Fi *or* Ethernet variants,
-> one-file hex images, no IDE or build tools), provisioning, and a working dashboard — using only
-> STM32CubeProgrammer, on Windows or Linux. This guide covers the full project (building from
-> source, architecture, module details) for developers going further than the quickstart.
+/IOTCONNECT reference firmware for the [STM32N6570-DK](https://www.st.com/en/evaluation-tools/stm32n6570-dk.html) with [ST67W611M1](https://www.st.com/content/st_com/en/campaigns/st67w-wifi6-bluetooth-thread-module-z13.html) Wi-Fi 6 module.
 
 ---
 
-1. [Hardware You Need](#hardware-you-need)
-2. [Additional Required Software](#additional-required-software)
-3. [The Two-Phase Flash Workflow](#the-two-phase-flash-workflow)
-4. [Clone This Repository](#clone-this-repository)
-5. [Build Configurations](#build-configurations)
-6. [Build, Debug, and Flash](#build-debug-and-flash)
-7. [Repository Structure](#repository-structure)
-8. [Architecture](#architecture)
-9. [Software Components](#software-components)
-10. [Flash and RAM Memory Layout](#flash-and-ram-memory-layout)
-11. [MQTT Data Model](#mqtt-data-model)
-12. [Securing the Application](#securing-the-application)
-13. [Wired Ethernet Transport](#wired-ethernet-transport)
-14. [ST67W6X Wi-Fi Module Notes](#w6x-wifi-module-notes)
-15. [Troubleshooting](#troubleshooting)
-16. [Reference](#reference)
-
-## Hardware You Need
-
-This project involves **two separate boards**, because the Wi-Fi module firmware and the main application firmware are
-flashed through two different pieces of hardware:
-
-| Board                                              | Role                                                                                                                                                                            | Purchase Link                                                          |
-|----------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------|
-| **STM32N6570-DK**                                  | The main development kit. Runs the application firmware you'll be working with for the rest of this guide.                                                                      | [st.com](https://www.st.com/en/evaluation-tools/stm32n6570-dk.html)    |
-| **X-NUCLEO-67W61M1**                               | Expansion board carrying the ST67W611M1 Wi-Fi 6 module. This is what you're actually updating firmware on in Step 1.                                                            | [st.com](https://www.st.com/en/evaluation-tools/x-nucleo-67w61m1.html) |
-| A **NUCLEO host board** (e.g. **NUCLEO-U575ZI-Q**) | Acts as the programmer for the X-NUCLEO-67W61M1. The X-NUCLEO board has no USB of its own — it needs a NUCLEO board's Arduino-shield headers and onboard ST-LINK to be flashed. | [st.com](https://www.st.com/en/evaluation-tools/nucleo-u575zi-q.html)  |
-
-Also needed:
-
-- Two USB cables (one for the NUCLEO host board's ST-LINK port, one for the STM32N6570-DK's ST-LINK port)
-- An [IOTCONNECT account](https://iotconnect.io/) (a free trial is available)
-- A network that **passes outbound UDP** — WebRTC's TURN relay uses **UDP port 443**, and many
-  routers/firewalls silently drop it via "QUIC blocking" or advanced-security features (often
-  alongside NTP/UDP-123 interception). On such networks the Wi-Fi build falls back to a TCP relay
-  that can stall mid-stream. Symptoms, log diagnosis, and router fixes are in
-  [Troubleshooting](#wi-fi-streaming-freezes-or-stalls-mid-session-router-udp-port-filtering);
-  the wired Ethernet image is unaffected.
-
-> [!NOTE]
-> You only need the X-NUCLEO + NUCLEO pairing for **Step 1** (flashing the Wi-Fi module). Once that's done, everything
-> else in this guide only touches the STM32N6570-DK.
-
----
+1. [Additional Required Software](#additional-required-software)
+2. [Clone This Repository](#clone-this-repository)
+3. [Build Configurations](#build-configurations)
+4. [Build, Debug, and Flash](#build-debug-and-flash)
+5. [Repository Structure](#repository-structure)
+6. [Architecture](#architecture)
+7. [Software Components](#software-components)
+8. [Flash and RAM Memory Layout](#flash-and-ram-memory-layout)
+9. [MQTT Data Model](#mqtt-data-model)
+10. [Securing the Application](#securing-the-application)
+11. [Wired Ethernet Transport](#wired-ethernet-transport)
+12. [ST67W6X Wi-Fi Module Notes](#w6x-wifi-module-notes)
+13. [Troubleshooting](#troubleshooting)
+14. [Reference](#reference)
 
 ## Additional Required Software
 
 - [STM32CubeIDE](https://www.st.com/en/development-tools/stm32cubeide.html) — only needed if you're building firmware
   from source. Pre-built binaries are already committed under `bin/FSBL` and `bin/Appli`, so most users can skip this.
-
-## The Two-Phase Flash Workflow
-
-Before diving in, it helps to know what you're actually doing across the next few steps. There are **two independent
-chips** involved, flashed through **two independent processes**, in a specific order:
-
-```mermaid
-flowchart LR
-    subgraph Phase1["Phase 1 — Wi-Fi Co-Processor"]
-        A[NUCLEO host board] -->|SPI, via Arduino headers| B[X-NUCLEO-67W61M1<br/>ST67W611M1 Wi-Fi chip]
-    end
-    subgraph Phase2["Phase 2 — Main Application"]
-        C[Your PC] -->|ST-LINK USB| D[STM32N6570-DK<br/>STM32N6 main chip]
-    end
-    Phase1 --> Phase2
-```
-
-1. **Wi-Fi co-processor firmware** (Step 1): The ST67W611M1 Wi-Fi chip runs its own separate firmware, called the **T02
-   mission profile**. "T02" means the Wi-Fi chip runs a minimal network co-processor (NCP) stack while the main STM32N6
-   handles the full LwIP network stack over SPI — as opposed to "T01," where LwIP runs embedded in the Wi-Fi chip
-   itself. This repo's middleware is built around T02, so that's the profile you need. This firmware is pushed onto the
-   Wi-Fi chip using a **separate NUCLEO board acting as a programmer** — the X-NUCLEO-67W61M1 has no USB connector of
-   its own.
-
-2. **Main application firmware** (Steps 2-4): The STM32N6 application (this repo's firmware) is flashed directly onto
-   the STM32N6570-DK using its own onboard ST-LINK, completely independent of the Wi-Fi flashing hardware.
-
-**Order matters**: flash the Wi-Fi module first. If the STM32N6570-DK application boots and tries to talk to Wi-Fi
-firmware older than V1.3.0, WebRTC ICE/TURN negotiation will silently fail even though the device otherwise connects
-fine.
-
----
 
 ## Clone This Repository
 
@@ -110,8 +39,6 @@ fine.
 git clone --recurse-submodules https://github.com/avnet-iotconnect/iotc-stm32-n6-w6x-kvs-webrtc.git
 cd iotc-stm32-n6-w6x-kvs-webrtc
 ```
-
----
 
 ## Build Configurations
 
@@ -656,18 +583,19 @@ Behavior:
 ## Securing the Application
 
 The STM32N6570 provides a strong security foundation for embedded IoT systems.
-This reference firmware enables the hardware cryptographic accelerators and outlines additional security mechanisms that developers should activate when moving toward production‑grade deployments.
+This reference firmware enables the hardware cryptographic accelerators and outlines additional security mechanisms that developers should activate when moving toward production-grade deployments.
 
 ### Hardware Security
 
-The STM32N6570 includes several built‑in security capabilities:
+The STM32N6570 includes several built-in security capabilities:
 
 #### **Secure Engine (SE)**
+
 Dedicated hardware accelerators for:
 - RNG (true hardware entropy)
-- SHA‑256 hashing
+- SHA-256 hashing
 - AES encryption/decryption
-- PKA (elliptic‑curve arithmetic)
+- PKA (elliptic-curve arithmetic)
 
 | Accelerator | Use Case                                  | Implementation |
 |-------------|--------------------------------------------|----------------|
@@ -679,30 +607,33 @@ Dedicated hardware accelerators for:
 Enabled by default via MbedTLS hardware abstraction. See [Appli/Core/Src/crypto/CRYPTO_ACCELERATORS.md](Appli/Core/Src/crypto/CRYPTO_ACCELERATORS.md) for a full per-accelerator reference (functions, thread safety, usage in the TLS handshake).
 
 #### **Memory Protection**
+
 Hardware enforcement of:
 - Flash/RAM access control
 - Privilege levels
 - Execution boundaries
 
-#### **TrustZone‑M (Arm Cortex‑M55)**
-Hardware‑enforced isolation between **Secure** and **Non‑Secure** worlds, enabling:
+#### **TrustZone-M (Arm Cortex-M55)**
+
+Hardware-enforced isolation between **Secure** and **Non-Secure** worlds, enabling:
 - Separation of trusted services from application code
 - Protection of cryptographic keys and sensitive operations
 - Reduced attack surface through compartmentalization
 
-TrustZone‑M provides the foundation for secure boot, secure firmware update, and secure key storage by ensuring that critical operations execute only in the Secure domain.
+TrustZone-M provides the foundation for secure boot, secure firmware update, and secure key storage by ensuring that critical operations execute only in the Secure domain.
 
 #### **Memory Cipher Engine (MCE)**
-The STM32N6570 includes a **Memory Cipher Engine** capable of encrypting and decrypting external memory regions on‑the‑fly.
+
+The STM32N6570 includes a **Memory Cipher Engine** capable of encrypting and decrypting external memory regions on-the-fly.
 MCE provides:
 
 - **Transparent XIP encryption** for external flash
-- **AES‑based inline encryption/decryption**
+- **AES-based inline encryption/decryption**
 - **Protection of sensitive assets at rest**, including:
   - Configuration data
   - Credentials
   - PKCS#11 objects (if stored externally)
-- **Low‑latency operation** suitable for real‑time workloads
+- **Low-latency operation** suitable for real-time workloads
 
 MCE is recommended for deployments where external flash contains sensitive material or where physical access to the device is a realistic threat.
 
@@ -718,40 +649,49 @@ The **IWDG Early Wakeup Interrupt (EWU)** is also enabled.
 It triggers shortly before the watchdog expires, allowing the firmware to capture diagnostic information.
 
 #### Additional Resources
+
 - [Security features on STM32N6 MCUs](https://wiki.st.com/stm32mcu/wiki/Security:Security_features_on_STM32N6_MCUs)
 
 ### Software Security
 
 #### **Secure Boot**
+
 Cryptographic verification of firmware integrity and authenticity at startup.
 
-#### **OEMuRoT (OEM micro‑Root of Trust)**
-Lightweight hardware‑anchored Root of Trust supporting:
+#### **OEMuRoT (OEM micro-Root of Trust)**
+
+Lightweight hardware-anchored Root of Trust supporting:
 - Secure provisioning
 - Secure firmware updates
-- Anti‑rollback protection
+- Anti-rollback protection
 
 #### Additional Resources
+
 - [OEMuRoT for STM32N6](https://wiki.st.com/stm32mcu/wiki/Security:OEMuRoT_for_STM32N6)
 
-### Application‑Level Security
+### Application-Level Security
 
-This firmware applies a defense‑in‑depth approach to protect device identity, communication, and cryptographic operations.
+This firmware applies a defense-in-depth approach to protect device identity, communication, and cryptographic operations.
 
 #### **Cryptographic Operations**
+
 All sensitive operations — including TLS handshakes, hashing, and key generation — use hardware accelerators through the mbedTLS ALT layer when available.
 
 #### **Key Management**
+
 Device keys and certificates are provisioned securely and managed via the PKCS#11 abstraction layer.
 
 #### **Secure Communication**
+
 All MQTT traffic is protected using TLS 1.2+ with mutual authentication.
 
 #### **Certificate Validation**
+
 Server certificates are validated against trusted CA certificates stored on the device.
 
 #### **Secure Provisioning**
-The CLI‑based provisioning workflow supports secure onboarding with on‑device certificate generation and IOTCONNECT identity enrollment.
+
+The CLI-based provisioning workflow supports secure onboarding with on-device certificate generation and IOTCONNECT identity enrollment.
 
 ### Deployment Recommendations
 
@@ -760,8 +700,8 @@ To harden the system for production environments, the following measures are str
 - **Use the `HW_Crypto` [build configuration](#build-configurations)** to maximize performance and ensure all supported hardware accelerators are enabled.
 - **Enable Secure Boot** on the STM32N6570 to verify firmware authenticity before execution.
 - **Review and customize `mbedtls_config.h`** based on your threat model, enabling only the required algorithms and disabling unused features.
-- **Adopt secure firmware update mechanisms**, such as OEMuRoT‑based authenticated updates with anti‑rollback protection.
-- **Protect device certificates and private keys** stored in external flash; for higher‑security deployments, consider integrating a secure element such as **STSAFE**.
+- **Adopt secure firmware update mechanisms**, such as OEMuRoT-based authenticated updates with anti-rollback protection.
+- **Protect device certificates and private keys** stored in external flash; for higher-security deployments, consider integrating a secure element such as **STSAFE**.
 - **Enable the Memory Cipher Engine (MCE)** to encrypt sensitive data stored in external flash and protect against physical extraction attacks.
 
 ---
