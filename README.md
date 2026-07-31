@@ -1,4 +1,4 @@
-# STM32N6570-DK KVS WebRTC Demo with AI People Counter
+# STM32N6570-DK KVS WebRTC Quickstart AI Demo
 
 <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-stm32-n6-demos/main/media/n6.jpg" alt="STM32N6570-DK" width="500"/>
 
