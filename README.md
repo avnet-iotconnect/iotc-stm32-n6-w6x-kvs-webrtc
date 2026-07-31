@@ -322,8 +322,8 @@ at least 2A.
 2. In the /IOTCONNECT console the device now shows **Connected**. Open the device's **Live Data**
    tab: telemetry arrives every few seconds, including the AI attributes:
 
-   | Attribute     | Meaning                                          |
-         |---------------|--------------------------------------------------|
+| Attribute     | Meaning                                          |
+ |---------------|--------------------------------------------------|
    | `ai_people`   | People detected in frame (NPU YOLOv2)            |
    | `ai_top_conf` | Highest detection confidence (%)                 |
    | `ai_infer_ms` | NPU inference time (ms)                          |
