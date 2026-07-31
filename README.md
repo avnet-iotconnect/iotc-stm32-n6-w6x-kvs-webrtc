@@ -40,13 +40,13 @@ All steps work on Windows and Linux host machines. The only ST tool required is 
 
 - A serial terminal such as [Tera Term](https://teratermproject.github.io/index-en.html) or PuTTY
 
-  > [!NOTE]
-  > Linux: STM32CubeProgrammer needs udev rules the first time you connect a board:
-  > ```sh
-  > sudo cp ~/STMicroelectronics/STM32Cube/STM32CubeProgrammer/Drivers/rules/*.rules /etc/udev/rules.d/
-  > sudo udevadm control --reload-rules && sudo udevadm trigger
-  > sudo usermod -aG plugdev $USER   # then log out/in
-  > ```
+> [!NOTE]
+> Linux: STM32CubeProgrammer needs udev rules the first time you connect a board:
+> ```sh
+> sudo cp ~/STMicroelectronics/STM32Cube/STM32CubeProgrammer/Drivers/rules/*.rules /etc/udev/rules.d/
+> sudo udevadm control --reload-rules && sudo udevadm trigger
+> sudo usermod -aG plugdev $USER   # then log out/in
+> ```
 
 ### Files to Download
 
@@ -61,7 +61,19 @@ top right of the file viewing window:
 4. The config script for your host OS — [bin/device-config.ps1](bin/device-config.ps1) (Windows) or
    [bin/device-config.py](bin/device-config.py) (Linux)
 
-## 3. Cloud Account Setup
+## 3. Connecting the Camera
+
+This demo is designed to utilize the included camera module for the KVS video streaming.
+Carefully connect the camera module to the `CAMERA` ribbon cable port of the STM32N6570-DK board 
+using the provided ribbon cable as shown below.
+
+<img src="./media/camera-connections.png" >
+
+Optionally, you can also mount the camera module to the board using the provided standoffs and bolts.
+
+<img src="./media/attached-camera.png" >
+
+## 4. Cloud Account Setup
 
 An /IOTCONNECT account with an **AWS backend** is required. If you need to create an account, a
 **free trial subscription** is available — no credit card required:
@@ -74,9 +86,9 @@ An /IOTCONNECT account with an **AWS backend** is required. If you need to creat
 > Be sure to check your SPAM folder for the temporary password after registering if you don't see
 > it after a couple of minutes.
 
-## 4. Program the STM32N6570-DK
+## 5. Program the STM32N6570-DK
 
-### 4.1 Set Boot Switch to Dev Mode
+### 5.1 Set Boot Switch to Dev Mode
 
 1. With the board unplugged, set the **BOOT1** switch to the
    **right**. The BOOT0 switch position doesn't matter in this mode.
@@ -91,7 +103,7 @@ An /IOTCONNECT account with an **AWS backend** is required. If you need to creat
 
 <img src="./media/LED2.png" >
 
-### 4.2 Flash with STM32CubeProgrammer (GUI)
+### 5.2 Flash with STM32CubeProgrammer (GUI)
 
 1. Open STM32CubeProgrammer and click **Connect** (top right; port `SWD`, mode `Hot plug`).
 2. Click the **EL** (External Loader) icon in the left menu and check
@@ -130,7 +142,7 @@ $P/STM32_Programmer_CLI -c port=SWD mode=HOTPLUG ap=1 -w stm32n6570-dk-kvs-demo-
 
 </details>
 
-### 4.3 Return Boot Switch to Run Mode
+### 5.3 Return Boot Switch to Run Mode
 
 Unplug the USB cable, set **both** BOOT switches to the **left**, then reconnect. 
 
@@ -138,7 +150,7 @@ Unplug the USB cable, set **both** BOOT switches to the **left**, then reconnect
 
 LED2 should now be off.
 
-## 5. Wi-Fi Variant Only: Update the Wi-Fi Module Firmware
+## 6. Wi-Fi Variant Only: Update the Wi-Fi Module Firmware
 
 > [!TIP]
 > For the Ethernet variant skip this step entirely.
@@ -172,7 +184,7 @@ This is a one-time update, done with a NUCLEO host board as the programmer:
 
 <img src="./media/module-connected.png" >
 
-## 6. Import the Device Template in /IOTCONNECT
+## 7. Import the Device Template in /IOTCONNECT
 
 1. Log in at [console.iotconnect.io](https://console.iotconnect.io).
 2. Open the **Device** module:
@@ -191,7 +203,7 @@ This is a one-time update, done with a NUCLEO host board as the programmer:
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/import-button.png" width="600"/>
 
-## 7. Configure the Device
+## 8. Configure the Device
 
 Using an automated script, the device generates its own key pair and certificate. 
 Run the script for your host machine from wherever you saved it in Step 2.
@@ -222,7 +234,7 @@ Next you will jump over to /IOTCONNECT to create the device and paste this certi
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/create-device-button.png" width="600"/>
 
-3. Set **Unique ID** *and* **Display Name** to the `thing_name` value from Step 7:
+3. Set **Unique ID** *and* **Display Name** to the `thing_name` value from Step 8:
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/device-name.png" width="600"/>
 
@@ -235,7 +247,7 @@ Next you will jump over to /IOTCONNECT to create the device and paste this certi
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/template-name.png" width="600"/>
 
 6. Under the certificate section choose **Use my certificate**, and paste the certificate PEM from
-   Step 7:
+   Step 8:
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/use-my-cert.png" width="600"/>
 
@@ -248,7 +260,7 @@ Next you will jump over to /IOTCONNECT to create the device and paste this certi
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/save-and-view.png" width="600"/>
 
 9. On the device's page, click the **paper-and-cog icon** (near *Connection Info*) to download the
-   **device configuration JSON** — return to the config script from Step 7 and paste its
+   **device configuration JSON** — return to the config script from Step 8 and paste its
    contents in:
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/paper-and-cog.png" width="600"/>
@@ -262,7 +274,7 @@ with `ENDJSON` on its own line)
 > For the Ethernet variant of the demo, the Wi-Fi values are ignored by the firmware so you can just click ENTER through 
 > the Wi-Fi credential prompts.
 
-## 8. Using the Demo
+## 9. Using the Demo
 
 1. Watch the serial terminal: within ~60 seconds the device connects to /IOTCONNECT
    (`[IOTC]` log lines), and the board's **LCD lights up with the live camera preview** — people in
@@ -281,12 +293,12 @@ with `ENDJSON` on its own line)
 4. Try the cloud commands (**Command** tab): `LCD_ON` / `LCD_OFF` toggles the board's LCD preview;
    `LED_RED_ON`, `LED_GREEN_ON`, etc. control the user LEDs.
 
-## 9. Going Further: Custom Development
+## 10. Going Further: Custom Development
 
 Building from source, firmware architecture, security, the Wi-Fi/Ethernet transport internals, and
 troubleshooting all live in one place: **[developer.md](developer.md)** — the full developer guide.
 
-## 10. Resources
+## 11. Resources
 
 - [Full developer guide](developer.md) — building from source, architecture, security, troubleshooting
 - [/IOTCONNECT overview](https://www.iotconnect.io/) · [/IOTCONNECT documentation](https://docs.iotconnect.io/)
