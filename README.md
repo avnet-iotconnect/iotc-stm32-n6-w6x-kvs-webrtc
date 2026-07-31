@@ -69,9 +69,8 @@ using the provided ribbon cable as shown below.
 
 <img src="./media/camera-connections.png" >
 
-Optionally, you can also mount the camera module to the board using the provided standoffs and bolts.
-
-<img src="./media/attached-camera.png" >
+Optionally, you can also mount the camera module to the board using the provided standoffs and bolts as 
+shown in the product image at the top of this document.
 
 ## 4. Cloud Account Setup
 
