@@ -850,6 +850,23 @@ int32_t CMW_CAMERA_Run()
  *         CMW_CAMERA_Start is needed.  Idempotent.
  * @retval CMW status
  */
+/* DIAG 2026-07-28: raw (never-dropped) UART markers bracketing the
+ * Camera_Drv.Start() call — narrowing down a crash that leaves no trace
+ * between "[CAM] DBL SP start<r=..." (media_cam.c) and the next expected
+ * "[CAM] sensor start r=..." print, which never appears. */
+static inline void diagRawPutc( char c )
+{
+    for( uint32_t i = 0; i < 600000UL; i++ )
+    {
+        if( *(volatile uint32_t *)0x56000C1CUL & ( 1UL << 7 ) )
+        {
+            *(volatile uint32_t *)0x56000C28UL = ( uint32_t ) c;
+            return;
+        }
+    }
+}
+static void diagRawPuts( const char *s ) { while( *s ) diagRawPutc( *s++ ); }
+
 int32_t CMW_CAMERA_StartSensorOnly(void)
 {
   int32_t ret;
@@ -861,10 +878,13 @@ int32_t CMW_CAMERA_StartSensorOnly(void)
 
   if (Camera_Drv.Start == NULL)
   {
+    diagRawPuts( "[DIAG] Camera_Drv.Start is NULL\r\n" );
     return CMW_ERROR_PERIPH_FAILURE;
   }
 
+  diagRawPuts( "[DIAG] Camera_Drv.Start>\r\n" );
   ret = Camera_Drv.Start(&camera_bsp);
+  diagRawPuts( "[DIAG] Camera_Drv.Start<\r\n" );
   if (ret != CMW_ERROR_NONE)
   {
     return CMW_ERROR_COMPONENT_FAILURE;

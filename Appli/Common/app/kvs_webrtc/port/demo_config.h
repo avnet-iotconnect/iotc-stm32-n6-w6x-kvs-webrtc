@@ -43,7 +43,7 @@
  * The TCP relay's *media* path still wedges once ICE nominates it (that
  * black-after-connect is a separate symptom); the real fix is making the UDP
  * TURN relay reliable / preferred, NOT removing the TCP one.  See
- * docs/w6x_module_notes.md. */
+ * developer.md (W6X module notes section). */
 #ifndef KVS_TURN_DROP_TCP
     #define KVS_TURN_DROP_TCP  0
 #endif

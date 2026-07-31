@@ -11,7 +11,7 @@ $configPath = Join-Path $scriptDir "config.json"
 
 # Resolve script paths
 $flashScript    = Join-Path $scriptDir "flash.ps1"
-$provisionScript = Join-Path $scriptDir "provision.ps1"
+$deviceConfigScript = Join-Path $scriptDir "device-config.ps1"
 $logPath        = Join-Path $scriptDir "log.txt"
 
 # Verify scripts exist
@@ -20,8 +20,8 @@ if (-not (Test-Path $flashScript)) {
     exit 1
 }
 
-if (-not (Test-Path $provisionScript)) {
-    Write-Error "provision.ps1 not found at $provisionScript"
+if (-not (Test-Path $deviceConfigScript)) {
+    Write-Error "device-config.ps1 not found at $deviceConfigScript"
     exit 1
 }
 
@@ -125,13 +125,13 @@ Write-Host "Board setup required:"
 Write-Host "Set the STM32N6-DK board to Flash mode, then power-cycle the board."
 [void](Read-Host "Press Enter to continue")
 
-# Run provision
-Write-Host "`n--- Running Provision Script ---"
+# Run device config
+Write-Host "`n--- Running Device Config Script ---"
 # Show live output and append the same output to log.txt
-& $provisionScript *>&1 | Tee-Object -FilePath $logPath -Append
+& $deviceConfigScript *>&1 | Tee-Object -FilePath $logPath -Append
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Provision failed."
+    Write-Error "Device config failed."
     exit $LASTEXITCODE
 }
 

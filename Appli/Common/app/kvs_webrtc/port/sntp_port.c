@@ -515,7 +515,7 @@ void sntp_init( void )
     }
 
     /* Gateway next: LANs whose router intercepts client NTP to public
-     * servers (Google Wifi/Nest — see docs/w6x_module_notes.md §1 note)
+     * servers (Google Wifi/Nest — see developer.md (W6X module notes section) §1 note)
      * still answer NTP at the gateway itself.  Fast-fails elsewhere. */
     if( netif_default != NULL )
     {

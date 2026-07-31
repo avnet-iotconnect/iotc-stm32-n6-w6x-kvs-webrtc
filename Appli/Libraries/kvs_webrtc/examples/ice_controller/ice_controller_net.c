@@ -1054,7 +1054,7 @@ static void AddRelayCandidates( IceControllerContext_t * pCtx )
                     icn_gather_puts( "[icn] relay addCand>\r\n" );
                     iceResult = Ice_AddRelayCandidate( &pCtx->iceContext, &pCtx->iceServers[i].iceEndpoint, pCtx->iceServers[i].userName, pCtx->iceServers[i].userNameLength, pCtx->iceServers[i].password, pCtx->iceServers[i].passwordLength );
 
-                    /* docs/w6x_module_notes.md: bias nomination toward the UDP
+                    /* developer.md (W6X module notes section): bias nomination toward the UDP
                      * relay.  The W6X TCP-TX path wedges under media load once
                      * nominated ([TLS] snd stall -> GATE CLOSE), so advertise
                      * the TLS/TCP relay candidate at the RFC 8445 minimum
@@ -1707,7 +1707,7 @@ IceControllerResult_t IceControllerNet_ExecuteTlsHandshake( IceControllerContext
                                                    &( pSocketContext->pIceServer->password[ 0 ] ),
                                                    pSocketContext->pIceServer->passwordLength );
 
-                /* docs/w6x_module_notes.md ("Attempted + REVERTED"): keep the
+                /* developer.md (W6X module notes section) ("Attempted + REVERTED"): keep the
                  * TLS/TCP relay — its Allocate is the only reliable one — but
                  * bias nomination toward the UDP relay, because the W6X
                  * TCP-TX path wedges under media load once nominated

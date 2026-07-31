@@ -20,6 +20,7 @@
 #include "media_enc.h"
 #include "lcd_preview.h"             /* on-board LCD preview                */
 #include "media_cam_config.h"        /* VENC_*_WIDTH / HEIGHT, CAMERA_FPS   */
+#include "ai_detection.h"            /* no-op stubs when !ENABLE_AI_DETECTION */
 
 #include "stm32n6xx_hal.h"
 
@@ -192,8 +193,6 @@ static void prvMediaTask( void * pvParam )
      * (sensor idle until a viewer connects) and left the AI task wedged.
      * No-op unless ENABLE_AI_DETECTION.  Stop is in media_cam.c Stop. */
     {
-        extern void AiDetection_PipeStart( void );
-
         /* BISECT (2026-07-20) step 1 RESULT: PIPE2 off -> sessions survive
          * (160s+, isnd 26ms vs ~1100ms); platform work exonerated, AI path
          * confirmed as the killer.  Step 2: PIPE2 back ON with inference
@@ -298,8 +297,6 @@ static void prvMediaTask( void * pvParam )
          * NPU is busy, so the downscale (~1-2 ms) runs only ~2x/s — the frame
          * is still stable here (DCMIPP is writing the other ping-pong buffer). */
         {
-            extern void AiDetection_SubmitNV12( const uint8_t *, const uint8_t *,
-                                                uint32_t, uint32_t );
             AiDetection_SubmitNV12( xCamFrame.pY, xCamFrame.pUV,
                                     VENC_IMX335_WIDTH, VENC_IMX335_HEIGHT );
         }

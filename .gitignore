@@ -9,6 +9,8 @@ bin/log.txt
 bin/*.crt
 bin/*.pem
 bin/config.json
+bin/generated_iotconnect_identity/
+__pycache__/
 Appli-trusted.bin
 FSBL-trusted.bin
 

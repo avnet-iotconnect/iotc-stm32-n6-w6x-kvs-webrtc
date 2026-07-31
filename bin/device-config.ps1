@@ -165,10 +165,10 @@ function Open-BoardSerialPort {
         $port.Open()
     }
     catch [System.UnauthorizedAccessException] {
-        throw "Serial port '$PortName' is currently in use. Close your serial terminal or any other tool using $PortName, then rerun .\provision.ps1."
+        throw "Serial port '$PortName' is currently in use. Close your serial terminal or any other tool using $PortName, then rerun .\device-config.ps1."
     }
     catch [System.IO.IOException] {
-        throw "Serial port '$PortName' could not be opened. Close any terminal or tool using $PortName, confirm the board is connected, then rerun .\provision.ps1."
+        throw "Serial port '$PortName' could not be opened. Close any terminal or tool using $PortName, confirm the board is connected, then rerun .\device-config.ps1."
     }
     Start-Sleep -Milliseconds 300
     return $port
@@ -468,7 +468,7 @@ function Show-UiInstructions {
     Write-Host "   $ThingName"
     Write-Host "4. Select the appropriate Entity."
     Write-Host "5. Select Template:"
-    Write-Host "   STM32N6 W6X LED and Button Demo"
+    Write-Host "   STM32N6 W6X KVS WebRTC 2"
     Write-Host "6. In Device certificate, select ONLY:"
     Write-Host "   Use my certificate"
     Write-Host "   Do not select Auto-generated or any other certificate option."

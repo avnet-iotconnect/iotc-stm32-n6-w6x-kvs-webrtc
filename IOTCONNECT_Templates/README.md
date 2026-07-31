@@ -1,13 +1,9 @@
 # IOTCONNECT Templates
 
-This folder contains two IOTCONNECT device templates for the STM32N6 W6X IoT reference firmware. They are **not**
-interchangeable — pick based on whether you need video streaming:
+This folder contains the IOTCONNECT device template for the STM32N6 W6X IoT reference firmware:
 
 - **`stm32n6wrt.json`** ("STM32N6 W6X KVS WebRTC 2", template code `stm32n6wr2`, msgCode XG4EGET) — verified working export with `videoStreamResource`="2" / `videoStreamType`="3" (BOTH values are required for the backend to provision a KVS channel; a device on this template shows `CD: XG4EGET` in its boot log and receives `vs.carn` in the identity response).
-  Use this one; it's what [readme.md](../readme.md)'s provisioning steps import. Required for the KVS WebRTC video
-  demo.
-- **`stm32n6_w6x_iot_template_completed.json`** ("STM32N6 W6X LED and Button Demo") — LED/button telemetry and
-  commands only, no video-streaming properties. Use only if you specifically want a non-video template.
+  This is what [README.md](../README.md)'s provisioning steps import. Required for the KVS WebRTC video demo.
 
 Source reviewed against:
 - [iotconnect_runtime.c](../Appli/Common/app/iotconnect/iotconnect_runtime.c)
@@ -86,7 +82,7 @@ whichever detection came first out of postprocessing.
 Two ways to reuse your dashboards:
 
 1. **Import a dashboard export against this template** *(recommended)*: create the device with
-   `stm32n6wrt.json` as described in the [QUICKSTART](../QUICKSTART.md), then import your dashboard
+   `stm32n6wrt.json` as described in the [QUICKSTART](../README.md), then import your dashboard
    export (e.g. `Projects/uvc/strm32n6_uvc_dashboard.json` in the iotc-stm32-n6-demos repo) and
    point it at this device — widgets bind by attribute name, and all names/scales match.
 2. **Keep dashboards bound to your existing `n6uvc` template**: create this device under `n6uvc`

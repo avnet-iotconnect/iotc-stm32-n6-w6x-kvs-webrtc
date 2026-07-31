@@ -768,7 +768,7 @@ static int32_t GetIceServerList( AppContext_t * pAppContext,
                  * GATE CLOSE) and the viewer stays black; ICE picks UDP vs TCP
                  * relay non-deterministically.  Removing it forces the reliable
                  * UDP relay every time.  Kept on Ethernet (KVS_TURN_DROP_TCP=0).
-                 * See demo_config.h / docs/w6x_module_notes.md. */
+                 * See demo_config.h / developer.md (W6X module notes section). */
                 if( ( pOutputIceServers[ currentIceServerIndex ].serverType == ICE_CONTROLLER_ICE_SERVER_TYPE_TURNS ) &&
                     ( pOutputIceServers[ currentIceServerIndex ].protocol == ICE_SOCKET_PROTOCOL_TCP ) )
                 {

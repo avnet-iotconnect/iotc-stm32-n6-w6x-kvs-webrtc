@@ -233,27 +233,50 @@ void CMW_IMX335_SetDefaultSensorValues(CMW_IMX335_config_t *imx335_config)
   imx335_config->pixel_format = CMW_PIXEL_FORMAT_RAW10;
 }
 
+/* DIAG 2026-07-28: raw (never-dropped) UART markers bracketing each
+ * sub-step — narrowing down a crash that leaves no trace anywhere inside
+ * Camera_Drv.Start(). */
+static inline void diagImxRawPutc( char c )
+{
+    for( uint32_t i = 0; i < 600000UL; i++ )
+    {
+        if( *(volatile uint32_t *)0x56000C1CUL & ( 1UL << 7 ) )
+        {
+            *(volatile uint32_t *)0x56000C28UL = ( uint32_t ) c;
+            return;
+        }
+    }
+}
+static void diagImxRawPuts( const char *s ) { while( *s ) diagImxRawPutc( *s++ ); }
+
 static int32_t CMW_IMX335_Start(void *io_ctx)
 {
-#ifndef ISP_MW_TUNING_TOOL_SUPPORT
   int ret;
+#ifndef ISP_MW_TUNING_TOOL_SUPPORT
   /* Statistic area is provided with null value so that it force the ISP Library to get the statistic
    * area information from the tuning file.
    */
   (void) ISP_IQParamCacheInit; /* unused */
+  diagImxRawPuts( "[DIAG] ISP_Init>\r\n" );
   ret = ISP_Init(&((CMW_IMX335_t *)io_ctx)->hIsp, ((CMW_IMX335_t *)io_ctx)->hdcmipp, 0, &((CMW_IMX335_t *)io_ctx)->appliHelpers, &ISP_IQParamCacheInit_IMX335);
+  diagImxRawPuts( "[DIAG] ISP_Init<\r\n" );
   if (ret != ISP_OK)
   {
     return CMW_ERROR_COMPONENT_FAILURE;
   }
 
+  diagImxRawPuts( "[DIAG] ISP_Start>\r\n" );
   ret = ISP_Start(&((CMW_IMX335_t *)io_ctx)->hIsp);
+  diagImxRawPuts( "[DIAG] ISP_Start<\r\n" );
   if (ret != ISP_OK)
   {
       return CMW_ERROR_PERIPH_FAILURE;
   }
 #endif
-  return IMX335_Start(&((CMW_IMX335_t *)io_ctx)->ctx_driver);
+  diagImxRawPuts( "[DIAG] IMX335_Start>\r\n" );
+  ret = IMX335_Start(&((CMW_IMX335_t *)io_ctx)->ctx_driver);
+  diagImxRawPuts( "[DIAG] IMX335_Start<\r\n" );
+  return ret;
 }
 
 static int32_t CMW_IMX335_Run(void *io_ctx)
