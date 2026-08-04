@@ -4,7 +4,7 @@
  */
 
 /*
- * This file provides function that provide c2d message parsing and ability to send acks back to IOTCONNECT.
+ * This file provides function that provide c2d message parsing and ability to send acks back to IoTConnect.
  *
  * OTA USE CASES WITH C2D PROCESSING
  * Example simple use:
@@ -86,11 +86,6 @@ int iotcl_c2d_process_event_with_length(const uint8_t *data, size_t data_len);
 // The user must manually free the returned string when it is no longer needed.
 const char *iotcl_c2d_get_command(IotclC2dEventData data);
 
-// Returns the numeric c2d event type ("ct") of the message, or -1 if data is
-// NULL. Values follow the IoTConnect 2.1 protocol; notably 112 = dashboard
-// "Start Video" and 113 = "Stop Video" (these carry no "cmd" field).
-int iotcl_c2d_get_event_type(IotclC2dEventData data);
-
 // Returns the number of files available for download. The OTA event will always have at least one URL.
 int iotcl_c2d_get_ota_url_count(IotclC2dEventData data);
 
@@ -127,7 +122,7 @@ const char *iotcl_c2d_get_ota_hw_version(IotclC2dEventData data);
 
 // Returns the Acknowledgement ID from the OTA or command (when "receipt required" setting is set in the template).
 // If a command tha tis configured in the template without "receipt required" is sent, the return value will be NULL.
-// This acknowledgement ID can be used to report the status of OTA or command back to IOTCONNECT.
+// This acknowledgement ID can be used to report the status of OTA or command back to IoTConnect.
 // If you need to destroy the event data during the callback processing, you can iotcl_strdup() or copy this ack ID locally.
 const char *iotcl_c2d_get_ack_id(IotclC2dEventData data);
 
@@ -167,3 +162,29 @@ void iotcl_c2d_destroy_event(IotclC2dEventData data);
 #endif
 
 #endif //IOTCL_C2D_H
+
+/* This override adds one declaration on top of the pristine iotc-c-lib header
+ * of the same name. iotcl.h (submodule, unpatched) does its own same-directory
+ * #include "iotcl_c2d.h" that resolves to the pristine core/include copy
+ * before this override is reached in most translation units — since that
+ * copy shares the IOTCL_C2D_H guard above, the block above only runs once,
+ * whichever copy gets there first (harmless: both are identical). The new
+ * declaration below needs its own independent guard so it is always seen,
+ * regardless of which copy "won" the IOTCL_C2D_H race. */
+#ifndef IOTCL_C2D_GET_EVENT_TYPE_DECLARED
+#define IOTCL_C2D_GET_EVENT_TYPE_DECLARED
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Returns the numeric c2d event type ("ct") of the message, or -1 if data is
+// NULL. Values follow the IoTConnect 2.1 protocol; notably 112 = dashboard
+// "Start Video" and 113 = "Stop Video" (these carry no "cmd" field).
+int iotcl_c2d_get_event_type(IotclC2dEventData data);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // IOTCL_C2D_GET_EVENT_TYPE_DECLARED

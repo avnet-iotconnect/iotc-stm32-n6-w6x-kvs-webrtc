@@ -7,3 +7,6 @@
 [submodule "Appli/Libraries/tinycbor"]
 	path = Appli/Libraries/tinycbor
 	url = https://github.com/intel/tinycbor.git
+[submodule "Appli/Libraries/iotc-c-lib"]
+	path = Appli/Libraries/iotc-c-lib
+	url = https://github.com/avnet-iotconnect/iotc-c-lib.git

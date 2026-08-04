@@ -194,7 +194,12 @@ This section maps the repository layout and the role of each major module.
 Application tasks:
 
 - `mqtt/` — MQTT agent task, reconnect logic, subscription dispatch
-- `iotconnect/` — IOTCONNECT runtime (identity, telemetry, commands, KVS config parsing)
+- `iotconnect/` — IOTCONNECT runtime (identity, telemetry, commands, KVS config parsing). The
+  IoTConnect C library itself is a git submodule at `Appli/Libraries/iotc-c-lib` (pinned to
+  `v3.2.0-proto-v2.1`); `iotconnect/overrides/` holds local, patched copies of the 4 files where
+  this project needs behavior the pristine library doesn't have (dashboard Start/Stop Video
+  commands, FreeRTOS CLI logger integration) — see that directory's own files for what's patched
+  and why.
 - `kvs_webrtc/` — KVS WebRTC task (signaling, media pipeline)
 - `led/` — LED desired/reported control
 - `button/` — button event reporting
