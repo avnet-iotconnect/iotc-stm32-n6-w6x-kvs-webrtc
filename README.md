@@ -1,6 +1,10 @@
 # STM32N6570-DK KVS WebRTC Quickstart AI Demo
 
-<img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-stm32-n6-demos/main/media/n6.jpg" alt="STM32N6570-DK" width="500"/>
+* [Purchase the STM32N6570-DK](https://www.avnet.com/americas/product/stmicroelectronics/stm32n6570-dk/evolve-117383039/)
+* [Purchase the X-NUCLEO-67W61M1 Wi-Fi Module](https://www.avnet.com/americas/product/stmicroelectronics/x-nucleo-67w61m1/evolve-119350174/)
+* [Purchase the NUCLEO-U575ZI-Q Host Board](https://www.avnet.com/americas/product/stmicroelectronics/nucleo-u575zi-q/evolve-56201142?searchTerm=NUCLEO-U575ZI-Q)
+
+<img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-stm32-n6-demos/main/media/n6.jpg" alt="STM32N6570-DK" width="300"/>
 
 1. [Introduction](#1-introduction)
 2. [Prerequisites](#2-prerequisites)
@@ -83,7 +87,7 @@ This demo is designed to utilize the included camera module for the KVS video st
 Carefully connect the camera module to the `CAMERA` ribbon cable port of the STM32N6570-DK board
 using the provided ribbon cable as shown below.
 
-<img src="./media/camera-connections.png" >
+<img src="./media/camera-connections.png" width="300">
 
 Optionally, you can also mount the camera module to the board using the provided standoffs and bolts as
 shown in the product image at the top of this document.
@@ -111,15 +115,15 @@ An /IOTCONNECT account with an **AWS backend** is required. If you need to creat
 1. With the board unplugged, set the **BOOT1** switch to the
    **right**. The BOOT0 switch position doesn't matter in this mode.
 
-<img src="./media/dev-mode.png" >
+<img src="./media/dev-mode.png" width="300">
 
 2. Connect a USB-C cable from your PC to the board's ST-LINK USB port (CN6).
 
-<img src="./media/st-link.png" >
+<img src="./media/st-link.png" width="300">
 
 3. Confirm that LED2 lights up to confirm Dev Mode is active.
 
-<img src="./media/LED2.png" >
+<img src="./media/LED2.png" width="300">
 
 ### 5.2 Flash with STM32CubeProgrammer (GUI)
 
@@ -164,7 +168,7 @@ $P/STM32_Programmer_CLI -c port=SWD mode=HOTPLUG ap=1 -w stm32n6570-dk-kvs-demo-
 
 Unplug the USB cable, set **both** BOOT switches to the **left**, then reconnect.
 
-<img src="./media/flash-mode.png" >
+<img src="./media/flash-mode.png" width="300">
 
 LED2 should now be off.
 
@@ -184,9 +188,9 @@ This is a one-time update, done with a NUCLEO host board as the programmer:
 > The module's pins line up with the outermost pins of the NUCLEO host board, and should be plugged in
 > at the top of rows.
 
-<img src="./media/nucleo-pins.png" >
+<img src="./media/nucleo-pins.png" width="300">
 
-<img src="./media/wifi-module-nucleo.png" >
+<img src="./media/wifi-module-nucleo.png" width="300">
 
 2. Clone ST's tool repo: `git clone https://github.com/STMicroelectronics/x-cube-st67w61.git`
 3. From `x-cube-st67w61/Projects/ST67W6X_Scripts/Binaries/`, run
@@ -198,28 +202,28 @@ This is a one-time update, done with a NUCLEO host board as the programmer:
 4. When the script reports success, move the X-NUCLEO board onto the STM32N6570-DK's Arduino
    headers. The NUCLEO host board is no longer needed.
 
-<img src="./media/module-port.png" >
+<img src="./media/module-port.png" width="300">
 
-<img src="./media/module-connected.png" >
+<img src="./media/module-connected.png" width="300">
 
 ## 7. Import the Device Template in /IOTCONNECT
 
 1. Log in at [console.iotconnect.io](https://console.iotconnect.io).
 2. Open the **Device** module:
 
-   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/device-page.png" width="600"/>
+   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/device-page.png" width="300"/>
 
 3. At the bottom of the page, click **Templates**:
 
-   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/templates-button.png" width="600"/>
+   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/templates-button.png" width="300"/>
 
 4. Click **Create Template**:
 
-   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/create-template-button.png" width="600"/>
+   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/create-template-button.png" width="300"/>
 
 5. Click **Import**, and select the **`stm32n6wrt.json`** file you downloaded in Step 2:
 
-   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/import-button.png" width="600"/>
+   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/import-button.png" width="300"/>
 
 ## 8. Configure the Device
 
@@ -250,24 +254,24 @@ Next you will jump over to /IOTCONNECT to create the device and paste this certi
 2. After logging into your /IOTCONNECT account on [console.iotconnect.io](https://console.iotconnect.io), go to the
    **Device** page and click **Create Device**:
 
-   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/create-device-button.png" width="600"/>
+   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/create-device-button.png" width="300"/>
 
 3. Set **Unique ID** *and* **Display Name** to the `thing_name` value from Step 8:
 
-   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/device-name.png" width="600"/>
+   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/device-name.png" width="300"/>
 
 4. Select your **Entity**:
 
-   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/select-entity.png" width="600"/>
+   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/select-entity.png" width="300"/>
 
 5. Select the template you imported (**STM32N6 W6X KVS WebRTC 2**):
 
-   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/template-name.png" width="600"/>
+   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/template-name.png" width="300"/>
 
 6. Under the certificate section choose **Use my certificate**, and paste the certificate PEM from
    Step 8:
 
-   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/use-my-cert.png" width="600"/>
+   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/use-my-cert.png" width="300"/>
 
 7. Under the streaming settings, set:
     - **Stream Type**: `Module Based`
@@ -275,13 +279,13 @@ Next you will jump over to /IOTCONNECT to create the device and paste this certi
     - **Auto Start Video Stream**: leave **off** — you start the stream on demand from the console.
 8. Click **Save & View**:
 
-   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/save-and-view.png" width="600"/>
+   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/save-and-view.png" width="300"/>
 
 9. On the device's page, click the **paper-and-cog icon** (near *Connection Info*) to download the
    **device configuration JSON** — return to the config script from Step 8 and paste its
    contents in:
 
-   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/paper-and-cog.png" width="600"/>
+   <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/paper-and-cog.png" width="300"/>
 
 10. Open and then copy and paste the downloaded device configuration JSON back into the configuration script (end the
     paste
@@ -300,14 +304,14 @@ option to the 5V_USB_SNK option. The ST-LINK connection cannot provide the neces
 
 To do this, on the underside of the board move the JP2 jumper from the top set of pins to the middle set of pins.
 
-<img src="./media/jumper-original.png" >
+<img src="./media/jumper-original.png" width="300">
 
-<img src="./media/jumper-after.png" >
+<img src="./media/jumper-after.png" width="300">
 
 From now on, the board will be powered via a second USB-C connection on the USB1 port to a 5V power supply that provides
 at least 2A.
 
-<img src="./media/usb-power.png" >
+<img src="./media/usb-power.png" width="300">
 
 > [!NOTE]
 > The ST-LINK USB connection can still be used for future flashing or serial communication , but will be physically
@@ -343,3 +347,6 @@ troubleshooting all live in one place: **[developer.md](developer.md)** — the 
 - [Full developer guide](developer.md) — building from source, architecture, security, troubleshooting
 - [/IOTCONNECT overview](https://www.iotconnect.io/) · [/IOTCONNECT documentation](https://docs.iotconnect.io/)
 - [STM32N6570-DK product page](https://www.st.com/en/evaluation-tools/stm32n6570-dk.html)
+- [Purchase the STM32N6570-DK](https://www.avnet.com/americas/product/stmicroelectronics/stm32n6570-dk/evolve-117383039/)
+- [Purchase the X-NUCLEO-67W61M1 Wi-Fi Module](https://www.avnet.com/americas/product/stmicroelectronics/x-nucleo-67w61m1/evolve-119350174/)
+- [Purchase the NUCLEO-U575ZI-Q Host Board](https://www.avnet.com/americas/product/stmicroelectronics/nucleo-u575zi-q/evolve-56201142?searchTerm=NUCLEO-U575ZI-Q)
