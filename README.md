@@ -127,7 +127,7 @@ An /IOTCONNECT account with an **AWS backend** is required. If you need to creat
 
 ### 5.2 Flash with STM32CubeProgrammer 
 
-#### GUI
+#### Option 1: GUI
 
 1. Open STM32CubeProgrammer and click **Connect** (top right; port `SWD`, mode `Hot plug`).
 2. Click the **EL** (External Loader) icon in the left menu and check
@@ -141,7 +141,7 @@ An /IOTCONNECT account with an **AWS backend** is required. If you need to creat
 6. **Disconnect** in STM32CubeProgrammer.
 
 
-#### CLI
+#### Option 2: CLI
 
 Windows (PowerShell — adjust the installation path if needed):
 
