@@ -125,7 +125,9 @@ An /IOTCONNECT account with an **AWS backend** is required. If you need to creat
 
 <img src="./media/LED2.png" width="300">
 
-### 5.2 Flash with STM32CubeProgrammer (GUI)
+### 5.2 Flash with STM32CubeProgrammer 
+
+#### GUI
 
 1. Open STM32CubeProgrammer and click **Connect** (top right; port `SWD`, mode `Hot plug`).
 2. Click the **EL** (External Loader) icon in the left menu and check
@@ -138,8 +140,8 @@ An /IOTCONNECT account with an **AWS backend** is required. If you need to creat
    **Start Programming** → wait for *File download complete*.
 6. **Disconnect** in STM32CubeProgrammer.
 
-<details>
-<summary><b>Command-line alternative (Windows & Linux)</b></summary>
+
+#### CLI
 
 Windows (PowerShell — adjust the installation path if needed):
 
@@ -162,7 +164,6 @@ $P/STM32_Programmer_CLI -c port=SWD mode=HOTPLUG ap=1 -w stm32n6570-dk-kvs-demo-
 > [!NOTE]
 > Substitute the `-ethernet` hex for the Ethernet variant of the demo.
 
-</details>
 
 ### 5.3 Return Boot Switch to Run Mode
 
@@ -193,13 +194,28 @@ This is a one-time update, done with a NUCLEO host board as the programmer:
 <img src="./media/wifi-module-nucleo.png" width="300">
 
 2. Clone ST's tool repo: `git clone https://github.com/STMicroelectronics/x-cube-st67w61.git`
-3. From `x-cube-st67w61/Projects/ST67W6X_Scripts/Binaries/`, run
+3. **Disconnect the STM32N6570-DK from USB** if it's still plugged in from an earlier step — only the
+   NUCLEO host board with the Wi-Fi module attached should be connected. Having both boards on USB at
+   the same time makes the flashing tool talk to the wrong board and the NCP flash fails with
+   `CHIP IMG LOAD SHAKEHAND FAIL`.
+4. From `x-cube-st67w61/Projects/ST67W6X_Scripts/Binaries/`, run
    `NCP_update_mission_profile_t02.bat` (Windows) or `./NCP_update_mission_profile_t02.sh` (Linux).
 
 > [!IMPORTANT]
-> On Linux, first run `chmod +x QConn_Flash/QConn_Flash_Cmd-ubuntu`
+> On Linux, first run `chmod +x NCP_update_mission_profile_t02.sh QConn_Flash/QConn_Flash_Cmd-ubuntu`
+> (the cloned repo doesn't preserve the executable bit, so both scripts need it set or you'll get
+> `Permission denied`).
+>
+> The script looks for `STM32_Programmer_CLI` at a hardcoded path
+> (`/usr/local/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin`). If you installed
+> STM32CubeProgrammer elsewhere (e.g. `~/STMicroelectronics/...`), put its `bin` directory on your
+> `PATH` *before* running the script, otherwise it fails with `STM32_Programmer_CLI: not found` /
+> `Board ID not detected`:
+> ```sh
+> export PATH="$HOME/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin:$PATH"
+> ```
 
-4. When the script reports success, move the X-NUCLEO board onto the STM32N6570-DK's Arduino
+5. When the script reports success, move the X-NUCLEO board onto the STM32N6570-DK's Arduino
    headers. The NUCLEO host board is no longer needed.
 
 <img src="./media/module-port.png" width="300">
@@ -287,9 +303,8 @@ Next you will jump over to /IOTCONNECT to create the device and paste this certi
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/paper-and-cog.png" width="300"/>
 
-10. Open and then copy and paste the downloaded device configuration JSON back into the configuration script (end the
-    paste
-    with `ENDJSON` on its own line)
+10. Open and then copy and paste the downloaded device configuration JSON back into the configuration script and
+    press Enter — the script detects the end of the paste automatically
 
 11. The script finishes by prompting for and writing the connection config and finally resetting the board.
 

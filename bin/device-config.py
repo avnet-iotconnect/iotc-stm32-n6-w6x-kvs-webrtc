@@ -317,7 +317,10 @@ def send_text_content(ser, text):
 
 
 def parse_iotconnect_device_config_json(json_text):
-    device_config = json.loads(json_text)
+    try:
+        device_config = json.loads(json_text)
+    except json.JSONDecodeError as exc:
+        raise ProvisionError(f"The pasted device JSON is not valid JSON: {exc}") from exc
 
     platform = str(device_config.get("pf", "")).lower()
     if platform == "aws":
@@ -374,16 +377,25 @@ def validate_discovery_url(backend, discovery_url):
 
 def read_pasted_json():
     print()
-    print("Paste the IOTCONNECT device JSON now.")
-    print("When you are finished, type ENDJSON on its own line and press Enter.")
+    print("Paste the IOTCONNECT device JSON now, then press Enter.")
     print()
 
+    # Detects the end of the paste by brace depth instead of requiring a
+    # separate end-of-input marker, so a normal paste-then-Enter is enough
+    # whether the terminal delivers it as one line or many.
     lines = []
+    depth = 0
+    started = False
     while True:
         line = input()
-        if line == "ENDJSON":
-            break
+        if not started and not line.strip():
+            continue
         lines.append(line)
+        depth += line.count("{") - line.count("}")
+        if "{" in line or "}" in line:
+            started = True
+        if started and depth <= 0:
+            break
 
     json_text = "\n".join(lines).strip()
     if not json_text:

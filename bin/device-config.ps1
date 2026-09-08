@@ -347,7 +347,12 @@ function Send-TextContent {
 function Parse-IotconnectDeviceConfigJson {
     param([Parameter(Mandatory = $true)][string]$JsonText)
 
-    $deviceConfig = $JsonText | ConvertFrom-Json
+    try {
+        $deviceConfig = $JsonText | ConvertFrom-Json
+    }
+    catch {
+        throw "The pasted device JSON is not valid JSON: $($_.Exception.Message)"
+    }
 
     $platform = [string]$deviceConfig.pf
     switch ($platform.ToLowerInvariant()) {
@@ -417,17 +422,29 @@ function Validate-DiscoveryUrl {
 
 function Read-PastedJson {
     Write-Host ""
-    Write-Host "Paste the IOTCONNECT device JSON now."
-    Write-Host "When you are finished, type ENDJSON on its own line and press Enter."
+    Write-Host "Paste the IOTCONNECT device JSON now, then press Enter."
     Write-Host ""
 
+    # Detects the end of the paste by brace depth instead of requiring a
+    # separate end-of-input marker, so a normal paste-then-Enter is enough
+    # whether the terminal delivers it as one line or many.
     $lines = New-Object System.Collections.Generic.List[string]
+    $depth = 0
+    $started = $false
     while ($true) {
         $line = Read-Host
-        if ($line -eq "ENDJSON") {
-            break
+        if (-not $started -and [string]::IsNullOrWhiteSpace($line)) {
+            continue
         }
         $lines.Add($line)
+        $depth += ([regex]::Matches($line, '\{')).Count
+        $depth -= ([regex]::Matches($line, '\}')).Count
+        if ($line.Contains('{') -or $line.Contains('}')) {
+            $started = $true
+        }
+        if ($started -and $depth -le 0) {
+            break
+        }
     }
 
     $jsonText = ($lines -join [Environment]::NewLine).Trim()
