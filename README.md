@@ -14,10 +14,11 @@
 6. [Wi-Fi Variant Only: Update the Wi-Fi Module Firmware](#6-wi-fi-variant-only-update-the-wi-fi-module-firmware)
 7. [Import the Device Template in /IOTCONNECT](#7-import-the-device-template-in-iotconnect)
 8. [Configure the Device](#8-configure-the-device)
-9. [Set USB Power Source](#9-set-usb-power-source)
-10. [Using the Demo](#10-using-the-demo)
-11. [Going Further: Custom Development](#11-going-further-custom-development)
-12. [Resources](#12-resources)
+9. [Wi-Fi Variant Only: Attach the Wi-Fi Module](#9-wi-fi-variant-only-attach-the-wi-fi-module)
+10. [Set USB Power Source](#10-set-usb-power-source)
+11. [Using the Demo](#11-using-the-demo)
+12. [Going Further: Custom Development](#12-going-further-custom-development)
+13. [Resources](#13-resources)
 
 ## 1. Introduction
 
@@ -215,12 +216,13 @@ This is a one-time update, done with a NUCLEO host board as the programmer:
 > export PATH="$HOME/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin:$PATH"
 > ```
 
-5. When the script reports success, move the X-NUCLEO board onto the STM32N6570-DK's Arduino
-   headers. The NUCLEO host board is no longer needed.
+5. When the script reports success, disconnect the NUCLEO host board and reconnect the
+   STM32N6570-DK to your PC's ST-LINK USB-C port (CN6).
 
-<img src="./media/module-port.png" width="300">
-
-<img src="./media/module-connected.png" width="300">
+> [!NOTE]
+> Leave the X-NUCLEO-67W61M1 unplugged from the STM32N6570-DK for now — its headers sit directly
+> over the DK's ST-LINK USB-C port, which Step 8's device-config script needs. You'll attach the
+> module in Step 9, once that script is done with the port.
 
 ## 7. Import the Device Template in /IOTCONNECT
 
@@ -312,7 +314,19 @@ Next you will jump over to /IOTCONNECT to create the device and paste this certi
 > For the Ethernet variant of the demo, the Wi-Fi values are ignored by the firmware so you can just click ENTER through
 > the Wi-Fi credential prompts.
 
-## 9. Set USB Power Source
+## 9. Wi-Fi Variant Only: Attach the Wi-Fi Module
+
+> [!TIP]
+> For the Ethernet variant skip this step entirely.
+
+Now that Step 8's device-config script is done with the STM32N6570-DK's ST-LINK USB-C port, plug the
+X-NUCLEO-67W61M1 onto the DK's Arduino headers.
+
+<img src="./media/module-port.png" width="300">
+
+<img src="./media/module-connected.png" width="300">
+
+## 10. Set USB Power Source
 
 To support the LCD and AI power usage of this demo, the board needs to have its power source switched from the 5V_STLNK
 option to the 5V_USB_SNK option. The ST-LINK connection cannot provide the necessary amperage.
@@ -329,11 +343,11 @@ at least 2A.
 <img src="./media/usb-power.png" width="300">
 
 > [!NOTE]
-> The ST-LINK USB connection can still be used for future flashing or serial communication , but will be physically
-> blocked by the Wi-Fi module's headers. For this reason it is recommended to remove the Wi-Fi module during flashing. 
-> Alternatively you could purchase GPIO pin extenders for the Wi-Fi module to have its headers clear the ST-LINK port.
+> The ST-LINK USB connection can still be used for future flashing or serial communication, but is now physically
+> blocked by the Wi-Fi module's headers attached in Step 9. If you need the ST-LINK port again later, remove the
+> Wi-Fi module temporarily, or purchase GPIO pin extenders for the module so its headers clear the port.
 
-## 10. Using the Demo
+## 11. Using the Demo
 
 1. Watch the serial terminal: within ~60 seconds the device connects to /IOTCONNECT
    (`[IOTC]` log lines), and the board's **LCD lights up with the live camera preview** — people in
@@ -352,12 +366,12 @@ at least 2A.
 4. Try the cloud commands (**Command** tab): `LCD_ON` / `LCD_OFF` toggles the board's LCD preview;
    `LED_RED_ON`, `LED_GREEN_ON`, etc. control the user LEDs.
 
-## 11. Going Further: Custom Development
+## 12. Going Further: Custom Development
 
 Building from source, firmware architecture, security, the Wi-Fi/Ethernet transport internals, and
 troubleshooting all live in one place: **[developer.md](developer.md)** — the full developer guide.
 
-## 12. Resources
+## 13. Resources
 
 - [Full developer guide](developer.md) — building from source, architecture, security, troubleshooting
 - [/IOTCONNECT overview](https://www.iotconnect.io/) · [/IOTCONNECT documentation](https://docs.iotconnect.io/)
