@@ -48,6 +48,7 @@ All steps work on Windows and Linux host machines. The only ST tool required is 
     - [X-NUCLEO-67W61M1](https://www.st.com/en/evaluation-tools/x-nucleo-67w61m1.html) Wi-Fi module board
       (plugged onto the DK's Arduino headers)
     - A NUCLEO host board (e.g. [NUCLEO-U575ZI-Q](https://www.st.com/en/evaluation-tools/nucleo-u575zi-q.html))
+    - 1 micro-USB cable
     - A 2.4 GHz WPA2 Wi-Fi network
 - **Ethernet variant only:** Ethernet Cable connected to a switch/router
 
