@@ -186,17 +186,20 @@ This is a one-time update, done with a NUCLEO host board as the programmer:
 
 <img src="./media/wifi-module-nucleo.png" width="300">
 
-2. Clone ST's tool repo: `git clone https://github.com/STMicroelectronics/x-cube-st67w61.git`
+2. Clone ST's tool repo: 
+   ```
+   git clone https://github.com/STMicroelectronics/x-cube-st67w61.git
+   ```
 
-3. Move into the cloned repo:
+4. Move into the cloned repo:
    ```
    cd x-cube-st67w61/Projects/ST67W6X_Scripts/Binaries/
    ```
-4. If you're on a Linux host PC, set executable permissions:
+5. If you're on a Linux host PC, set executable permissions:
    ```
    chmod +x NCP_update_mission_profile_t02.sh QConn_Flash/QConn_Flash_Cmd-ubuntu
    ```
-5. The script looks for `STM32_Programmer_CLI` at a hardcoded path
+6. The script looks for `STM32_Programmer_CLI` at a hardcoded path
 (`/usr/local/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin`). If you installed
 STM32CubeProgrammer elsewhere (e.g. `~/STMicroelectronics/...`), put its `bin` directory on your
 `PATH`:
