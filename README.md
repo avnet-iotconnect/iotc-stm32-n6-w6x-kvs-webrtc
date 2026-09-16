@@ -14,8 +14,8 @@
 6. [Import the Device Template in /IOTCONNECT](#6-import-the-device-template-in-iotconnect)
 7. [Configure the Device](#7-configure-the-device)
 8. [Wi-Fi Variant Only: Attach the Wi-Fi Module](#8-wi-fi-variant-only-attach-the-wi-fi-module)
-9. [Set USB Power Source](#9-set-usb-power-source)
-10. [Connecting the Camera](#10-connecting-the-camera)
+9. [Connecting the Camera](#9-connecting-the-camera)
+10. [Set USB Power Source](#10-set-usb-power-source)
 11. [Using the Demo](#11-using-the-demo)
 12. [Going Further: Custom Development](#12-going-further-custom-development)
 13. [Resources](#13-resources)
@@ -316,7 +316,18 @@ X-NUCLEO-67W61M1 onto the DK's Arduino headers.
 
 <img src="./media/module-connected.png" width="300">
 
-## 9. Set USB Power Source
+## 9. Connecting the Camera
+
+This demo is designed to utilize the included camera module for the KVS video streaming.
+Carefully connect the camera module to the `CAMERA` ribbon cable port of the STM32N6570-DK board
+using the provided ribbon cable as shown below.
+
+<img src="./media/camera-connections.png" width="300">
+
+Optionally, you can also mount the camera module to the board using the provided standoffs and bolts as
+shown in the product image at the top of this document.
+
+## 10. Set USB Power Source
 
 To support the LCD and AI power usage of this demo, the board needs to have its power source switched from the 5V_STLNK
 option to the 5V_USB_SNK option. The ST-LINK connection cannot provide the necessary amperage.
@@ -336,17 +347,6 @@ at least 2A.
 > The ST-LINK USB connection can still be used for future flashing or serial communication, but is now physically
 > blocked by the Wi-Fi module's headers attached in Step 8. If you need the ST-LINK port again later, remove the
 > Wi-Fi module temporarily, or purchase GPIO pin extenders for the module so its headers clear the port.
-
-## 10. Connecting the Camera
-
-This demo is designed to utilize the included camera module for the KVS video streaming.
-Carefully connect the camera module to the `CAMERA` ribbon cable port of the STM32N6570-DK board
-using the provided ribbon cable as shown below.
-
-<img src="./media/camera-connections.png" width="300">
-
-Optionally, you can also mount the camera module to the board using the provided standoffs and bolts as
-shown in the product image at the top of this document.
 
 ## 11. Using the Demo
 
