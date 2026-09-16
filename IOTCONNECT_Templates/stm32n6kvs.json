@@ -1,6 +1,6 @@
 {
-    "code":  "stm32n6wr2",
-    "name":  "STM32N6 W6X KVS WebRTC 2",
+    "code":  "stm32n6kvs",
+    "name":  "STM32N6 W6X KVS WebRTC",
     "authType":  2,
     "attributes":  [
                        {
