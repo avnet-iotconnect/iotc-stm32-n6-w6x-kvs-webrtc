@@ -78,7 +78,7 @@ top right of the file viewing window:
 * Ethernet: [bin/quickstart/stm32n6570-dk-kvs-demo-ethernet.hex](bin/quickstart/stm32n6570-dk-kvs-demo-ethernet.hex)
 
 2. The AI model: [bin/Model/network_data.hex](bin/Model/network_data.hex)
-3. The device template: [IOTCONNECT_Templates/stm32n6wrt.json](IOTCONNECT_Templates/stm32n6wrt.json)
+3. The device template: [IOTCONNECT_Templates/stm32n6kvs.json](IOTCONNECT_Templates/stm32n6kvs.json)
 4. The config script for your host OS — [bin/device-config.ps1](bin/device-config.ps1) (Windows) or
    [bin/device-config.py](bin/device-config.py) (Linux)
 
@@ -239,7 +239,7 @@ This is a one-time update, done with a NUCLEO host board as the programmer:
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/create-template-button.png" width="300"/>
 
-5. Click **Import**, and select the **`stm32n6wrt.json`** file you downloaded in Step 2:
+5. Click **Import**, and select the **`stm32n6kvs.json`** file you downloaded in Step 2:
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/import-button.png" width="300"/>
 
@@ -282,7 +282,7 @@ Next you will jump over to /IOTCONNECT to create the device and paste this certi
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/select-entity.png" width="300"/>
 
-5. Select the template you imported (**STM32N6 W6X KVS WebRTC 2**):
+5. Select the template you imported (**STM32N6 W6X KVS WebRTC**):
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/template-name.png" width="300"/>
 
