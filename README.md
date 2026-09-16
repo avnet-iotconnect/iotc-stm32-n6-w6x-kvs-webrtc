@@ -60,14 +60,6 @@ All steps work on Windows and Linux host machines. The only ST tool required is 
 
 - **Optional**: A serial terminal such as [Tera Term](https://teratermproject.github.io/index-en.html) or PuTTY
 
-> [!NOTE]
-> Linux: STM32CubeProgrammer needs udev rules the first time you connect a board:
-> ```sh
-> sudo cp ~/STMicroelectronics/STM32Cube/STM32CubeProgrammer/Drivers/rules/*.rules /etc/udev/rules.d/
-> sudo udevadm control --reload-rules && sudo udevadm trigger
-> sudo usermod -aG plugdev $USER   # then log out/in
-> ```
-
 ### Files to Download
 
 Download each of the following files by opening the provided link, then click the **Download raw file** button at the
@@ -128,6 +120,14 @@ An /IOTCONNECT account with an **AWS backend** is required. If you need to creat
 <img src="./media/LED2.png" width="300">
 
 ### 5.2 Flash with STM32CubeProgrammer 
+
+> [!NOTE]
+> Linux: STM32CubeProgrammer needs udev rules the first time you connect a board:
+> ```sh
+> sudo cp ~/STMicroelectronics/STM32Cube/STM32CubeProgrammer/Drivers/rules/*.rules /etc/udev/rules.d/
+> sudo udevadm control --reload-rules && sudo udevadm trigger
+> sudo usermod -aG plugdev $USER   # then log out/in
+> ```
 
 #### Option 1: GUI
 
