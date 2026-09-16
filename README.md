@@ -207,6 +207,7 @@ STM32CubeProgrammer elsewhere (e.g. `~/STMicroelectronics/...`), put its `bin` d
 export PATH="$HOME/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin:$PATH"
 ```
 6. Execute the flashing script using the command for your host environment:
+
    Windows:   
    ```
    NCP_update_mission_profile_t02.bat
