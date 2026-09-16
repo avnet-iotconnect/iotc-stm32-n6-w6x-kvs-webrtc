@@ -42,7 +42,7 @@ All steps work on Windows and Linux host machines. The only ST tool required is 
 ### Hardware
 
 - [STM32N6570-DK](https://www.st.com/en/evaluation-tools/stm32n6570-dk.html) Discovery Kit
-- 2× USB-C cables
+- 1 USB-C cable
 - 5V USB Power Supply that **outputs at least 2A**
 - **Wi-Fi variant only:**
     - [X-NUCLEO-67W61M1](https://www.st.com/en/evaluation-tools/x-nucleo-67w61m1.html) Wi-Fi module board
