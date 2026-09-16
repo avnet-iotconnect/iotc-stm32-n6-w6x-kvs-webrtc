@@ -8,14 +8,14 @@
 
 1. [Introduction](#1-introduction)
 2. [Prerequisites](#2-prerequisites)
-3. [Connecting the Camera](#3-connecting-the-camera)
-4. [Cloud Account Setup](#4-cloud-account-setup)
-5. [Program the STM32N6570-DK](#5-program-the-stm32n6570-dk)
-6. [Wi-Fi Variant Only: Update the Wi-Fi Module Firmware](#6-wi-fi-variant-only-update-the-wi-fi-module-firmware)
-7. [Import the Device Template in /IOTCONNECT](#7-import-the-device-template-in-iotconnect)
-8. [Configure the Device](#8-configure-the-device)
-9. [Wi-Fi Variant Only: Attach the Wi-Fi Module](#9-wi-fi-variant-only-attach-the-wi-fi-module)
-10. [Set USB Power Source](#10-set-usb-power-source)
+3. [Cloud Account Setup](#3-cloud-account-setup)
+4. [Program the STM32N6570-DK](#4-program-the-stm32n6570-dk)
+5. [Wi-Fi Variant Only: Update the Wi-Fi Module Firmware](#5-wi-fi-variant-only-update-the-wi-fi-module-firmware)
+6. [Import the Device Template in /IOTCONNECT](#6-import-the-device-template-in-iotconnect)
+7. [Configure the Device](#7-configure-the-device)
+8. [Wi-Fi Variant Only: Attach the Wi-Fi Module](#8-wi-fi-variant-only-attach-the-wi-fi-module)
+9. [Set USB Power Source](#9-set-usb-power-source)
+10. [Connecting the Camera](#10-connecting-the-camera)
 11. [Using the Demo](#11-using-the-demo)
 12. [Going Further: Custom Development](#12-going-further-custom-development)
 13. [Resources](#13-resources)
@@ -75,18 +75,7 @@ top right of the file viewing window:
 4. The config script for your host OS — [bin/device-config.ps1](bin/device-config.ps1) (Windows) or
    [bin/device-config.py](bin/device-config.py) (Linux)
 
-## 3. Connecting the Camera
-
-This demo is designed to utilize the included camera module for the KVS video streaming.
-Carefully connect the camera module to the `CAMERA` ribbon cable port of the STM32N6570-DK board
-using the provided ribbon cable as shown below.
-
-<img src="./media/camera-connections.png" width="300">
-
-Optionally, you can also mount the camera module to the board using the provided standoffs and bolts as
-shown in the product image at the top of this document.
-
-## 4. Cloud Account Setup
+## 3. Cloud Account Setup
 
 An /IOTCONNECT account with an **AWS backend** is required. If you need to create an account, a
 **free trial subscription** is available — no credit card required:
@@ -102,7 +91,7 @@ An /IOTCONNECT account with an **AWS backend** is required. If you need to creat
 > Be sure to check your SPAM folder for the temporary password after registering if you don't see
 > it after a couple of minutes.
 
-## 5. Program the STM32N6570-DK
+## 4. Program the STM32N6570-DK
 
 ### 5.1 Set Boot Switch to Dev Mode
 
@@ -175,7 +164,7 @@ Unplug the USB cable, set **both** BOOT switches to the **left**, then reconnect
 
 LED2 should now be off.
 
-## 6. Wi-Fi Variant Only: Update the Wi-Fi Module Firmware
+## 5. Wi-Fi Variant Only: Update the Wi-Fi Module Firmware
 
 > [!TIP]
 > For the Ethernet variant skip this step entirely.
@@ -222,10 +211,10 @@ This is a one-time update, done with a NUCLEO host board as the programmer:
 
 > [!NOTE]
 > Leave the X-NUCLEO-67W61M1 unplugged from the STM32N6570-DK for now — its headers sit directly
-> over the DK's ST-LINK USB-C port, which Step 8's device-config script needs. You'll attach the
-> module in Step 9, once that script is done with the port.
+> over the DK's ST-LINK USB-C port, which Step 7's device-config script needs. You'll attach the
+> module in Step 8, once that script is done with the port.
 
-## 7. Import the Device Template in /IOTCONNECT
+## 6. Import the Device Template in /IOTCONNECT
 
 1. Log in at [console.iotconnect.io](https://console.iotconnect.io).
 2. Open the **Device** module:
@@ -244,7 +233,7 @@ This is a one-time update, done with a NUCLEO host board as the programmer:
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/import-button.png" width="300"/>
 
-## 8. Configure the Device
+## 7. Configure the Device
 
 Using an automated script, the device generates its own key pair and certificate.
 Run the script for your host machine from wherever you saved it in Step 2.
@@ -275,7 +264,7 @@ Next you will jump over to /IOTCONNECT to create the device and paste this certi
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/create-device-button.png" width="300"/>
 
-3. Set **Unique ID** *and* **Display Name** to the `thing_name` value from Step 8:
+3. Set **Unique ID** *and* **Display Name** to the `thing_name` value from Step 7:
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/device-name.png" width="300"/>
 
@@ -288,7 +277,7 @@ Next you will jump over to /IOTCONNECT to create the device and paste this certi
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/template-name.png" width="300"/>
 
 6. Under the certificate section choose **Use my certificate**, and paste the certificate PEM from
-   Step 8:
+   Step 7:
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/use-my-cert.png" width="300"/>
 
@@ -301,7 +290,7 @@ Next you will jump over to /IOTCONNECT to create the device and paste this certi
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/save-and-view.png" width="300"/>
 
 9. On the device's page, click the **paper-and-cog icon** (near *Connection Info*) to download the
-   **device configuration JSON** — return to the config script from Step 8 and paste its
+   **device configuration JSON** — return to the config script from Step 7 and paste its
    contents in:
 
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/paper-and-cog.png" width="300"/>
@@ -315,19 +304,19 @@ Next you will jump over to /IOTCONNECT to create the device and paste this certi
 > For the Ethernet variant of the demo, the Wi-Fi values are ignored by the firmware so you can just click ENTER through
 > the Wi-Fi credential prompts.
 
-## 9. Wi-Fi Variant Only: Attach the Wi-Fi Module
+## 8. Wi-Fi Variant Only: Attach the Wi-Fi Module
 
 > [!TIP]
 > For the Ethernet variant skip this step entirely.
 
-Now that Step 8's device-config script is done with the STM32N6570-DK's ST-LINK USB-C port, plug the
+Now that Step 7's device-config script is done with the STM32N6570-DK's ST-LINK USB-C port, plug the
 X-NUCLEO-67W61M1 onto the DK's Arduino headers.
 
 <img src="./media/module-port.png" width="300">
 
 <img src="./media/module-connected.png" width="300">
 
-## 10. Set USB Power Source
+## 9. Set USB Power Source
 
 To support the LCD and AI power usage of this demo, the board needs to have its power source switched from the 5V_STLNK
 option to the 5V_USB_SNK option. The ST-LINK connection cannot provide the necessary amperage.
@@ -345,8 +334,19 @@ at least 2A.
 
 > [!NOTE]
 > The ST-LINK USB connection can still be used for future flashing or serial communication, but is now physically
-> blocked by the Wi-Fi module's headers attached in Step 9. If you need the ST-LINK port again later, remove the
+> blocked by the Wi-Fi module's headers attached in Step 8. If you need the ST-LINK port again later, remove the
 > Wi-Fi module temporarily, or purchase GPIO pin extenders for the module so its headers clear the port.
+
+## 10. Connecting the Camera
+
+This demo is designed to utilize the included camera module for the KVS video streaming.
+Carefully connect the camera module to the `CAMERA` ribbon cable port of the STM32N6570-DK board
+using the provided ribbon cable as shown below.
+
+<img src="./media/camera-connections.png" width="300">
+
+Optionally, you can also mount the camera module to the board using the provided standoffs and bolts as
+shown in the product image at the top of this document.
 
 ## 11. Using the Demo
 
