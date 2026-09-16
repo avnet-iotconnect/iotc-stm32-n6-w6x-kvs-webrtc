@@ -323,8 +323,12 @@ Next you will jump over to /IOTCONNECT to create the device and paste this certi
 > [!TIP]
 > For the Ethernet variant skip this step entirely.
 
+> [!NOTE]
+> For the Ethernet variant skip this step entirely.Unplug the USB-C cable from the STLINK port of the
+> STM32N6570-DK to allow the X-NUCLEO-67W61M1 to seat fully onto its headers. 
+
 Now that Step 7's device-config script is done with the STM32N6570-DK's ST-LINK USB-C port, plug the
-X-NUCLEO-67W61M1 onto the DK's Arduino headers.
+X-NUCLEO-67W61M1 onto the DK's headers.
 
 <img src="./media/module-port.png" width="300">
 
