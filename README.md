@@ -187,28 +187,32 @@ This is a one-time update, done with a NUCLEO host board as the programmer:
 <img src="./media/wifi-module-nucleo.png" width="300">
 
 2. Clone ST's tool repo: `git clone https://github.com/STMicroelectronics/x-cube-st67w61.git`
-3. **Disconnect the STM32N6570-DK from USB** if it's still plugged in from an earlier step — only the
-   NUCLEO host board with the Wi-Fi module attached should be connected. Having both boards on USB at
-   the same time makes the flashing tool talk to the wrong board and the NCP flash fails with
-   `CHIP IMG LOAD SHAKEHAND FAIL`.
-4. From `x-cube-st67w61/Projects/ST67W6X_Scripts/Binaries/`, run
-   `NCP_update_mission_profile_t02.bat` (Windows) or `./NCP_update_mission_profile_t02.sh` (Linux).
 
-> [!IMPORTANT]
-> On Linux, first run `chmod +x NCP_update_mission_profile_t02.sh QConn_Flash/QConn_Flash_Cmd-ubuntu`
-> (the cloned repo doesn't preserve the executable bit, so both scripts need it set or you'll get
-> `Permission denied`).
->
-> The script looks for `STM32_Programmer_CLI` at a hardcoded path
-> (`/usr/local/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin`). If you installed
-> STM32CubeProgrammer elsewhere (e.g. `~/STMicroelectronics/...`), put its `bin` directory on your
-> `PATH` *before* running the script, otherwise it fails with `STM32_Programmer_CLI: not found` /
-> `Board ID not detected`:
-> ```sh
-> export PATH="$HOME/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin:$PATH"
-> ```
-
-5. When the script reports success, disconnect the NUCLEO host board and reconnect the
+3. Move into the cloned repo:
+   ```
+   cd x-cube-st67w61/Projects/ST67W6X_Scripts/Binaries/
+   ```
+4. If you're on a Linux host PC, set executable permissions:
+   ```
+   chmod +x NCP_update_mission_profile_t02.sh QConn_Flash/QConn_Flash_Cmd-ubuntu
+   ```
+5. The script looks for `STM32_Programmer_CLI` at a hardcoded path
+(`/usr/local/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin`). If you installed
+STM32CubeProgrammer elsewhere (e.g. `~/STMicroelectronics/...`), put its `bin` directory on your
+`PATH`:
+```sh
+export PATH="$HOME/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin:$PATH"
+```
+6. Execute the flashing script using the command for your host environment:
+   Windows:   
+   ```
+   NCP_update_mission_profile_t02.bat
+   ```
+   Linux:
+   ```
+   ./NCP_update_mission_profile_t02.sh
+   ```
+6. When the script reports success, disconnect the NUCLEO host board and reconnect the
    STM32N6570-DK to your PC's ST-LINK USB-C port (CN6).
 
 > [!NOTE]
