@@ -158,11 +158,13 @@ $P/STM32_Programmer_CLI -c port=SWD mode=HOTPLUG ap=1 -w stm32n6570-dk-kvs-demo-
 
 ### 5.3 Return Boot Switch to Run Mode
 
-Unplug the USB cable, set **both** BOOT switches to the **left**, then reconnect.
+Unplug the USB cable, and set **both** BOOT switches to the **left**.
 
 <img src="./media/flash-mode.png" width="300">
 
-LED2 should now be off.
+> [!NOTE]
+> If you are using the Wi-Fi variant, leave the device unplugged until step 7.
+> Having it connected to the PC can result in errors in the Wi-Fi module's flashing process.
 
 ## 5. Wi-Fi Variant Only: Update the Wi-Fi Module Firmware
 
@@ -234,6 +236,10 @@ This is a one-time update, done with a NUCLEO host board as the programmer:
    <img src="https://raw.githubusercontent.com/avnet-iotconnect/iotc-python-lite-sdk-demos/main/common/media/import-button.png" width="300"/>
 
 ## 7. Configure the Device
+
+> [!NOTE]
+> Connect the STLINK port of your STM32N6570-DK to your host PC via USB-C cable if it
+> is not already connected (it had to be disconnected for the Wi-Fi module flashing steps).
 
 Using an automated script, the device generates its own key pair and certificate.
 Run the script for your host machine from wherever you saved it in Step 2.
