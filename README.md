@@ -58,7 +58,7 @@ All steps work on Windows and Linux host machines. The only ST tool required is 
   (the latest version is fine — this guide's images are pre-signed, and programming was validated
   with `2.23.0`)
 
-- A serial terminal such as [Tera Term](https://teratermproject.github.io/index-en.html) or PuTTY
+- **Optional**: A serial terminal such as [Tera Term](https://teratermproject.github.io/index-en.html) or PuTTY
 
 > [!NOTE]
 > Linux: STM32CubeProgrammer needs udev rules the first time you connect a board:
